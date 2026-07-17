@@ -108,6 +108,16 @@ Trois onglets, charte graphique Sonate (vert sapin / crème / orange) :
   B2B/B2C, owner, score minimum, pagination) et fiche détail (deal, entreprise,
   contacts, autres deals de la même entreprise).
 
+## Performance
+
+Les pages de liste/détail sont mises en cache côté serveur (`unstable_cache`,
+30s) et les requêtes de comptage sont parallélisées avec la requête
+principale — l'app étant en lecture seule, une fraîcheur à 30s près est
+largement suffisante (les données ne changent que via une ré-exécution de
+`scripts/import.ts`). Si l'app reste lente malgré ça, vérifier que la région
+de la base Turso correspond à la région d'exécution des fonctions Netlify —
+un aller-retour transatlantique par requête est le suspect n°1.
+
 ## Auth basique
 
 Quelques comptes définis via la variable d'environnement `AUTH_USERS`
