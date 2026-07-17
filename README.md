@@ -104,8 +104,11 @@ stats en haut de chaque liste, badges de statut colorés :
   filtres B2B/B2C et source système) et fiche détail (infos entreprise, tous
   ses contacts, tous ses deals).
 - `/contacts` + `/contacts/[id]` : liste des contacts (recherche nom/email/
-  téléphone/entreprise) et fiche détail (infos contact, entreprise associée,
-  tous les deals de cette entreprise).
+  téléphone/entreprise). Cliquer sur un contact ouvre un **volet latéral**
+  (infos contact, entreprise associée, deals) par-dessus la liste, sans
+  changer de page — implémenté avec les Intercepting + Parallel Routes de
+  Next.js (`app/contacts/@modal/(.)[id]`) : l'URL `/contacts/[id]` reste
+  partageable/rechargeable et affiche alors la fiche en page complète.
 - `/deals` + `/deals/[id]` : liste des deals (recherche + filtres statut,
   B2B/B2C, owner, score minimum, pagination) et fiche détail (deal, entreprise,
   contacts, autres deals de la même entreprise).
