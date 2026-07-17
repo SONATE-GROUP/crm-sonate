@@ -103,8 +103,9 @@ stats en haut de chaque liste, badges de statut colorés :
 - `/companies` + `/companies/[id]` : liste des entreprises (recherche nom/site/secteur,
   filtres B2B/B2C et source système) et fiche détail (infos entreprise, tous
   ses contacts, tous ses deals).
-- `/contacts` : liste des contacts (recherche nom/email/téléphone/entreprise),
-  chaque ligne renvoie vers la fiche entreprise correspondante.
+- `/contacts` + `/contacts/[id]` : liste des contacts (recherche nom/email/
+  téléphone/entreprise) et fiche détail (infos contact, entreprise associée,
+  tous les deals de cette entreprise).
 - `/deals` + `/deals/[id]` : liste des deals (recherche + filtres statut,
   B2B/B2C, owner, score minimum, pagination) et fiche détail (deal, entreprise,
   contacts, autres deals de la même entreprise).

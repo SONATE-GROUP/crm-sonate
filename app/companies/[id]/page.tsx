@@ -68,7 +68,14 @@ export default async function CompanyDetailPage({
               key={c.id}
               className="grid grid-cols-2 gap-4 border-b border-sonate-green/5 pb-3 last:border-0 last:pb-0 sm:grid-cols-4"
             >
-              <Field label="Nom" value={c.fullName} />
+              <Field
+                label="Nom"
+                value={
+                  <Link href={`/contacts/${c.id}`} className="text-sonate-orange hover:underline">
+                    {c.fullName}
+                  </Link>
+                }
+              />
               <Field label="Email" value={c.email} />
               <Field label="Téléphone" value={c.phone} />
               <Field label="Rôle" value={c.role} />

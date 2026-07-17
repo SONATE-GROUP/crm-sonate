@@ -86,7 +86,11 @@ export default async function ContactsPage({
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="border-b border-sonate-green/5 last:border-0 hover:bg-sonate-orange/5">
-                <td className="px-4 py-3 font-semibold">{row.fullName}</td>
+                <td className="px-4 py-3">
+                  <Link href={`/contacts/${row.id}`} className="font-semibold hover:text-sonate-orange">
+                    {row.fullName}
+                  </Link>
+                </td>
                 <td className="px-4 py-3">{row.email ?? "—"}</td>
                 <td className="px-4 py-3">{row.phone ?? "—"}</td>
                 <td className="px-4 py-3">{row.role ?? "—"}</td>

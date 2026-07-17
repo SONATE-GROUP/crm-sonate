@@ -241,6 +241,21 @@ async function _listContacts(filters: ContactListFilters) {
 }
 export const listContacts = unstable_cache(_listContacts, ["list-contacts"], { revalidate: REVALIDATE_SECONDS });
 
+async function _getContactDetail(id: number) {
+  const [contact] = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
+  if (!contact) return null;
+
+  const [company, companyDeals] = await Promise.all([
+    db.select().from(companies).where(eq(companies.id, contact.companyId)).limit(1).then((r) => r[0]),
+    db.select().from(deals).where(eq(deals.companyId, contact.companyId)).orderBy(desc(deals.createdAt)),
+  ]);
+
+  return { contact, company, deals: companyDeals };
+}
+export const getContactDetail = unstable_cache(_getContactDetail, ["get-contact-detail"], {
+  revalidate: REVALIDATE_SECONDS,
+});
+
 async function _getDealDetail(id: number) {
   const [deal] = await db.select().from(deals).where(eq(deals.id, id)).limit(1);
   if (!deal) return null;
