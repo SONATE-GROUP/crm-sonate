@@ -58,7 +58,7 @@ export default async function DealsPage({
         title="Deals"
         meta={
           stats.lastImport
-            ? { label: "Dernier import", value: stats.lastImport.toLocaleDateString("fr-FR") }
+            ? { label: "Dernier import", value: new Date(stats.lastImport).toLocaleDateString("fr-FR") }
             : undefined
         }
       />
