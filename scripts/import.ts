@@ -62,14 +62,21 @@ function normalizeEmail(value: string | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-/** Clé de dédoublonnage des entreprises: minuscule, accents et ponctuation retirés. */
+/**
+ * Clé de dédoublonnage des entreprises: minuscule, accents/espaces/ponctuation
+ * retirés entièrement (pas juste collapsés) pour que "Cap Bornes" et
+ * "Capbornes" tombent sur la même clé. "@" est développé en "at" ("Wecare@work"
+ * ~ "wecareatwork"), et le marqueur manuel "doublon" parfois collé au nom
+ * ("Special Menuiseries / Doublon") est retiré avant normalisation.
+ */
 function normalizeCompanyKey(value: string): string {
   return value
+    .replace(/@/g, " at ")
+    .replace(/\bdoublon\b/gi, " ")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+    .replace(/[^a-z0-9]+/g, "");
 }
 
 const B2B_B2C_MAP: Record<string, "b2b" | "b2c" | "mixte"> = {

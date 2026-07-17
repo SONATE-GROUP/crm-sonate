@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, like, or, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { companies, contacts, deals, type DealStatus, type B2bB2c } from "@/db/schema";
+import { companies, contacts, deals, type DealStatus, type B2bB2c, type SourceSystem } from "@/db/schema";
 
 export const PAGE_SIZE = 50;
 
@@ -96,6 +96,120 @@ export async function listOwners() {
     .groupBy(deals.owner)
     .orderBy(asc(deals.owner));
   return rows.map((r) => r.owner!).filter(Boolean);
+}
+
+export type CompanyListFilters = {
+  q?: string;
+  b2bB2c?: B2bB2c;
+  sourceSystem?: SourceSystem;
+  page?: number;
+};
+
+export async function listCompanies(filters: CompanyListFilters) {
+  const page = Math.max(1, filters.page ?? 1);
+  const conditions = [];
+  if (filters.q) {
+    const term = `%${filters.q.toLowerCase()}%`;
+    conditions.push(
+      or(
+        like(sql`lower(${companies.name})`, term),
+        like(sql`lower(${companies.website})`, term),
+        like(sql`lower(${companies.sector})`, term)
+      )
+    );
+  }
+  if (filters.b2bB2c) conditions.push(eq(companies.b2bB2c, filters.b2bB2c));
+  if (filters.sourceSystem) conditions.push(eq(companies.sourceSystem, filters.sourceSystem));
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const dealCount = db.$with("deal_count").as(
+    db.select({ companyId: deals.companyId, dealN: sql<number>`count(*)`.as("deal_n") }).from(deals).groupBy(deals.companyId)
+  );
+  const contactCount = db.$with("contact_count").as(
+    db.select({ companyId: contacts.companyId, contactN: sql<number>`count(*)`.as("contact_n") }).from(contacts).groupBy(contacts.companyId)
+  );
+
+  const rows = await db
+    .with(dealCount, contactCount)
+    .select({
+      id: companies.id,
+      name: companies.name,
+      website: companies.website,
+      sector: companies.sector,
+      b2bB2c: companies.b2bB2c,
+      sourceSystem: companies.sourceSystem,
+      createdAt: companies.createdAt,
+      dealsCount: sql<number>`coalesce(${dealCount.dealN}, 0)`,
+      contactsCount: sql<number>`coalesce(${contactCount.contactN}, 0)`,
+    })
+    .from(companies)
+    .leftJoin(dealCount, eq(dealCount.companyId, companies.id))
+    .leftJoin(contactCount, eq(contactCount.companyId, companies.id))
+    .where(where)
+    .orderBy(desc(companies.createdAt))
+    .limit(PAGE_SIZE)
+    .offset((page - 1) * PAGE_SIZE);
+
+  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(companies).where(where);
+
+  return { rows, total: count, page, pageCount: Math.max(1, Math.ceil(count / PAGE_SIZE)) };
+}
+
+export async function getCompanyDetail(id: number) {
+  const [company] = await db.select().from(companies).where(eq(companies.id, id)).limit(1);
+  if (!company) return null;
+
+  const companyContacts = await db.select().from(contacts).where(eq(contacts.companyId, id)).orderBy(asc(contacts.id));
+  const companyDeals = await db.select().from(deals).where(eq(deals.companyId, id)).orderBy(desc(deals.createdAt));
+
+  return { company, contacts: companyContacts, deals: companyDeals };
+}
+
+export type ContactListFilters = {
+  q?: string;
+  page?: number;
+};
+
+export async function listContacts(filters: ContactListFilters) {
+  const page = Math.max(1, filters.page ?? 1);
+  const conditions = [];
+  if (filters.q) {
+    const term = `%${filters.q.toLowerCase()}%`;
+    conditions.push(
+      or(
+        like(sql`lower(${contacts.fullName})`, term),
+        like(sql`lower(${contacts.email})`, term),
+        like(sql`lower(${contacts.phone})`, term),
+        like(sql`lower(${companies.name})`, term)
+      )
+    );
+  }
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const rows = await db
+    .select({
+      id: contacts.id,
+      fullName: contacts.fullName,
+      email: contacts.email,
+      phone: contacts.phone,
+      role: contacts.role,
+      companyId: companies.id,
+      companyName: companies.name,
+    })
+    .from(contacts)
+    .innerJoin(companies, eq(contacts.companyId, companies.id))
+    .where(where)
+    .orderBy(asc(contacts.fullName))
+    .limit(PAGE_SIZE)
+    .offset((page - 1) * PAGE_SIZE);
+
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(contacts)
+    .innerJoin(companies, eq(contacts.companyId, companies.id))
+    .where(where);
+
+  return { rows, total: count, page, pageCount: Math.max(1, Math.ceil(count / PAGE_SIZE)) };
 }
 
 export async function getDealDetail(id: number) {

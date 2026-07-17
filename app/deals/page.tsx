@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { B2B_B2C_VALUES, DEAL_STATUS_LABELS, DEAL_STATUS_VALUES, type B2bB2c, type DealStatus } from "@/db/schema";
 import { listDeals, listOwners, PAGE_SIZE } from "@/lib/queries";
+import { fieldClass, labelClass } from "@/lib/ui";
+import { Pagination } from "@/components/Pagination";
 
 function isDealStatus(value: string): value is DealStatus {
   return (DEAL_STATUS_VALUES as readonly string[]).includes(value);
@@ -10,20 +12,6 @@ function isDealStatus(value: string): value is DealStatus {
 function isB2bB2c(value: string): value is B2bB2c {
   return (B2B_B2C_VALUES as readonly string[]).includes(value);
 }
-
-function buildHref(params: Record<string, string | undefined>, page: number) {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value) search.set(key, value);
-  }
-  if (page > 1) search.set("page", String(page));
-  const qs = search.toString();
-  return qs ? `/deals?${qs}` : "/deals";
-}
-
-const fieldClass =
-  "w-full rounded-xl border border-sonate-green/15 bg-white px-3 py-1.5 text-sm text-sonate-green outline-none focus:border-sonate-orange dark:border-sonate-cream/15 dark:bg-sonate-green-light dark:text-sonate-cream";
-const labelClass = "mb-1 block text-xs font-semibold uppercase tracking-wide text-sonate-muted";
 
 export default async function DealsPage({
   searchParams,
@@ -192,31 +180,7 @@ export default async function DealsPage({
         </table>
       </div>
 
-      {pageCount > 1 && (
-        <div className="mt-4 flex items-center justify-between text-sm">
-          <span className="text-sonate-muted">
-            Page {page} / {pageCount} ({PAGE_SIZE} par page)
-          </span>
-          <div className="flex gap-2">
-            {page > 1 && (
-              <Link
-                href={buildHref(currentParams, page - 1)}
-                className="rounded-full border border-sonate-green/20 px-4 py-1.5 font-medium dark:border-sonate-cream/30"
-              >
-                Précédent
-              </Link>
-            )}
-            {page < pageCount && (
-              <Link
-                href={buildHref(currentParams, page + 1)}
-                className="rounded-full border border-sonate-green/20 px-4 py-1.5 font-medium dark:border-sonate-cream/30"
-              >
-                Suivant
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
+      <Pagination basePath="/deals" params={currentParams} page={page} pageCount={pageCount} pageSize={PAGE_SIZE} />
     </div>
   );
 }

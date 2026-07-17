@@ -56,12 +56,17 @@ statuts non reconnus, valeurs de "Source" non catégorisées.
 - **Colonnes inversées** : `Name` (nom entreprise) et `Contact` (nom de la
   personne) sont mappées correctement (`companies.name` / `contacts.full_name`).
 - **Dédoublonnage** : entreprises dédupliquées sur le nom normalisé (minuscule,
-  sans accents/ponctuation) ; contacts dédupliqués sur l'email (lower/trim),
-  au sein d'une même entreprise. Une entreprise/contact déjà connu est
-  **réutilisé**, mais chaque ligne du CSV crée systématiquement un nouveau
-  `deal` (une entreprise peut ainsi avoir plusieurs deals dans le temps).
-  Exception : un contact sans email ne peut pas être dédupliqué (créé à
-  chaque ré-exécution) — un seul cas dans le jeu de données fourni.
+  accents/espaces/ponctuation retirés entièrement — "Cap Bornes" et
+  "Capbornes" tombent sur la même clé — `@` développé en "at", marqueur manuel
+  "doublon" retiré) ; contacts dédupliqués sur l'email (lower/trim), au sein
+  d'une même entreprise. **L'email est l'identifiant unique d'un lead/contact**
+  : une même adresse ne doit correspondre qu'à un seul contact, jamais à deux
+  fiches entreprise différentes (vérifié après import, cf. ci-dessous). Une
+  entreprise/contact déjà connu est **réutilisé**, mais chaque ligne du CSV
+  crée systématiquement un nouveau `deal` (une entreprise peut ainsi avoir
+  plusieurs deals dans le temps). Exception : un contact sans email ne peut
+  pas être dédupliqué (créé à chaque ré-exécution) — un seul cas dans le jeu
+  de données fourni.
 - **Colonnes ignorées** (quasi vides ou hors périmètre étape 1) : `1st Call`,
   `Closing`, `Date Devis`, `Date Relance` (+ variantes), `Date Relance 1/2`,
   `Persona`, `Formulaire`, `Relance faite`, `Remplissage form` (utilisée
@@ -92,11 +97,16 @@ statuts non reconnus, valeurs de "Source" non catégorisées.
 
 ## Application (lecture seule)
 
-- `/deals` : liste des prospects (entreprise + contact + infos du deal),
-  recherche (nom entreprise / contact / email) + filtres (statut, B2B/B2C,
-  owner, score minimum), pagination.
-- `/deals/[id]` : fiche détail (entreprise, tous ses contacts, le deal, les
-  autres deals éventuels de la même entreprise).
+Trois onglets, charte graphique Sonate (vert sapin / crème / orange) :
+
+- `/companies` + `/companies/[id]` : liste des entreprises (recherche nom/site/secteur,
+  filtres B2B/B2C et source système) et fiche détail (infos entreprise, tous
+  ses contacts, tous ses deals).
+- `/contacts` : liste des contacts (recherche nom/email/téléphone/entreprise),
+  chaque ligne renvoie vers la fiche entreprise correspondante.
+- `/deals` + `/deals/[id]` : liste des deals (recherche + filtres statut,
+  B2B/B2C, owner, score minimum, pagination) et fiche détail (deal, entreprise,
+  contacts, autres deals de la même entreprise).
 
 ## Auth basique
 
