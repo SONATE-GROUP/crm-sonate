@@ -21,6 +21,10 @@ function buildHref(params: Record<string, string | undefined>, page: number) {
   return qs ? `/deals?${qs}` : "/deals";
 }
 
+const fieldClass =
+  "w-full rounded-xl border border-sonate-green/15 bg-white px-3 py-1.5 text-sm text-sonate-green outline-none focus:border-sonate-orange dark:border-sonate-cream/15 dark:bg-sonate-green-light dark:text-sonate-cream";
+const labelClass = "mb-1 block text-xs font-semibold uppercase tracking-wide text-sonate-muted";
+
 export default async function DealsPage({
   searchParams,
 }: {
@@ -57,27 +61,23 @@ export default async function DealsPage({
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <h1 className="mb-4 text-xl font-semibold">Prospects</h1>
+    <div className="mx-auto max-w-6xl px-4 py-8">
+      <h1 className="mb-5 text-2xl font-extrabold tracking-tight">Prospects</h1>
 
-      <form className="mb-6 grid grid-cols-1 gap-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:grid-cols-2 lg:grid-cols-5">
+      <form className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-sonate-green/10 bg-white p-4 dark:border-sonate-cream/10 dark:bg-sonate-green-light sm:grid-cols-2 lg:grid-cols-5">
         <div className="lg:col-span-2">
-          <label className="mb-1 block text-xs font-medium text-zinc-500">Recherche</label>
+          <label className={labelClass}>Recherche</label>
           <input
             type="text"
             name="q"
             defaultValue={q ?? ""}
             placeholder="Entreprise, contact, email…"
-            className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+            className={fieldClass}
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-500">Statut</label>
-          <select
-            name="status"
-            defaultValue={statusParam ?? ""}
-            className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-          >
+          <label className={labelClass}>Statut</label>
+          <select name="status" defaultValue={statusParam ?? ""} className={fieldClass}>
             <option value="">Tous</option>
             {DEAL_STATUS_VALUES.map((value) => (
               <option key={value} value={value}>
@@ -87,12 +87,8 @@ export default async function DealsPage({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-500">B2B / B2C</label>
-          <select
-            name="b2bB2c"
-            defaultValue={b2bB2cParam ?? ""}
-            className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-          >
+          <label className={labelClass}>B2B / B2C</label>
+          <select name="b2bB2c" defaultValue={b2bB2cParam ?? ""} className={fieldClass}>
             <option value="">Tous</option>
             <option value="b2b">B2B</option>
             <option value="b2c">B2C</option>
@@ -100,12 +96,8 @@ export default async function DealsPage({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-500">Owner</label>
-          <select
-            name="owner"
-            defaultValue={owner ?? ""}
-            className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-          >
+          <label className={labelClass}>Owner</label>
+          <select name="owner" defaultValue={owner ?? ""} className={fieldClass}>
             <option value="">Tous</option>
             {owners.map((o) => (
               <option key={o} value={o}>
@@ -115,67 +107,83 @@ export default async function DealsPage({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-500">Score minimum</label>
+          <label className={labelClass}>Score minimum</label>
           <input
             type="number"
             name="scoreMin"
             defaultValue={scoreMinParam ?? ""}
             placeholder="0"
-            className="w-full rounded border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+            className={fieldClass}
           />
         </div>
         <div className="flex items-end gap-2 lg:col-span-5">
           <button
             type="submit"
-            className="rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
+            className="rounded-full bg-sonate-orange px-5 py-2 text-sm font-semibold text-sonate-cream transition-colors hover:bg-sonate-orange-dark"
           >
             Filtrer
           </button>
-          <Link href="/deals" className="rounded border border-zinc-300 px-4 py-1.5 text-sm dark:border-zinc-700">
+          <Link
+            href="/deals"
+            className="rounded-full border border-sonate-green/20 px-5 py-2 text-sm font-semibold text-sonate-green dark:border-sonate-cream/30 dark:text-sonate-cream"
+          >
             Réinitialiser
           </Link>
         </div>
       </form>
 
-      <p className="mb-3 text-sm text-zinc-500">{total} résultat{total !== 1 ? "s" : ""}</p>
+      <p className="mb-3 text-sm font-medium text-sonate-muted">
+        {total} résultat{total !== 1 ? "s" : ""}
+      </p>
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="overflow-x-auto rounded-2xl border border-sonate-green/10 bg-white dark:border-sonate-cream/10 dark:bg-sonate-green-light">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-zinc-200 text-xs uppercase text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-sonate-green/10 text-xs font-semibold uppercase tracking-wide text-sonate-muted dark:border-sonate-cream/10">
             <tr>
-              <th className="px-4 py-2">Entreprise</th>
-              <th className="px-4 py-2">Contact</th>
-              <th className="px-4 py-2">Statut</th>
-              <th className="px-4 py-2">B2B/B2C</th>
-              <th className="px-4 py-2">Owner</th>
-              <th className="px-4 py-2">Score</th>
-              <th className="px-4 py-2">Créé le</th>
+              <th className="px-4 py-3">Entreprise</th>
+              <th className="px-4 py-3">Contact</th>
+              <th className="px-4 py-3">Statut</th>
+              <th className="px-4 py-3">B2B/B2C</th>
+              <th className="px-4 py-3">Owner</th>
+              <th className="px-4 py-3">Score</th>
+              <th className="px-4 py-3">Créé le</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
-                <td className="px-4 py-2">
-                  <Link href={`/deals/${row.id}`} className="font-medium hover:underline">
+              <tr
+                key={row.id}
+                className="border-b border-sonate-green/5 last:border-0 hover:bg-sonate-orange/5 dark:border-sonate-cream/5 dark:hover:bg-sonate-cream/5"
+              >
+                <td className="px-4 py-3">
+                  <Link href={`/deals/${row.id}`} className="font-semibold hover:text-sonate-orange">
                     {row.companyName}
                   </Link>
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-3">
                   <div>{row.contactFullName ?? "—"}</div>
-                  <div className="text-xs text-zinc-500">{row.contactEmail ?? ""}</div>
+                  <div className="text-xs text-sonate-muted">{row.contactEmail ?? ""}</div>
                 </td>
-                <td className="px-4 py-2">{row.status ? DEAL_STATUS_LABELS[row.status] : "—"}</td>
-                <td className="px-4 py-2">{row.b2bB2c ?? "—"}</td>
-                <td className="px-4 py-2">{row.owner ?? "—"}</td>
-                <td className="px-4 py-2">{row.score ?? "—"}</td>
-                <td className="px-4 py-2 text-zinc-500">
+                <td className="px-4 py-3">
+                  {row.status ? (
+                    <span className="inline-flex items-center rounded-full bg-sonate-green/8 px-2.5 py-1 text-xs font-semibold text-sonate-green dark:bg-sonate-cream/10 dark:text-sonate-cream">
+                      {DEAL_STATUS_LABELS[row.status]}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="px-4 py-3">{row.b2bB2c ?? "—"}</td>
+                <td className="px-4 py-3">{row.owner ?? "—"}</td>
+                <td className="px-4 py-3 font-bold text-sonate-orange">{row.score ?? "—"}</td>
+                <td className="px-4 py-3 text-sonate-muted">
                   {row.createdAt ? new Date(row.createdAt).toLocaleDateString("fr-FR") : "—"}
                 </td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-sonate-muted">
                   Aucun résultat pour ces filtres.
                 </td>
               </tr>
@@ -186,17 +194,23 @@ export default async function DealsPage({
 
       {pageCount > 1 && (
         <div className="mt-4 flex items-center justify-between text-sm">
-          <span className="text-zinc-500">
+          <span className="text-sonate-muted">
             Page {page} / {pageCount} ({PAGE_SIZE} par page)
           </span>
           <div className="flex gap-2">
             {page > 1 && (
-              <Link href={buildHref(currentParams, page - 1)} className="rounded border border-zinc-300 px-3 py-1 dark:border-zinc-700">
+              <Link
+                href={buildHref(currentParams, page - 1)}
+                className="rounded-full border border-sonate-green/20 px-4 py-1.5 font-medium dark:border-sonate-cream/30"
+              >
                 Précédent
               </Link>
             )}
             {page < pageCount && (
-              <Link href={buildHref(currentParams, page + 1)} className="rounded border border-zinc-300 px-3 py-1 dark:border-zinc-700">
+              <Link
+                href={buildHref(currentParams, page + 1)}
+                className="rounded-full border border-sonate-green/20 px-4 py-1.5 font-medium dark:border-sonate-cream/30"
+              >
                 Suivant
               </Link>
             )}

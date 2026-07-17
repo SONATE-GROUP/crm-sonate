@@ -1,15 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jakarta = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
   subsets: ["latin"],
 });
 
@@ -24,18 +19,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="fr"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
-        <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
-            <Link href="/deals" className="font-semibold">
-              CRM Sonate
+    <html lang="fr" className={`${jakarta.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col bg-sonate-cream text-sonate-green dark:bg-sonate-green dark:text-sonate-cream">
+        <header className="border-b border-sonate-green/10 bg-sonate-cream dark:border-sonate-cream/10 dark:bg-sonate-green">
+          <div className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-4">
+            <Link href="/deals" className="flex flex-col leading-none">
+              <span className="text-2xl font-extrabold tracking-tight">Sonate</span>
+              <span className="text-[11px] font-medium text-sonate-muted">CRM interne</span>
             </Link>
-            <nav className="text-sm text-zinc-600 dark:text-zinc-400">
-              <Link href="/deals" className="hover:text-zinc-900 dark:hover:text-zinc-100">
+            <nav className="text-sm font-semibold">
+              <Link
+                href="/deals"
+                className="rounded-full px-3 py-1.5 hover:bg-sonate-green/5 dark:hover:bg-sonate-cream/10"
+              >
                 Prospects
               </Link>
             </nav>

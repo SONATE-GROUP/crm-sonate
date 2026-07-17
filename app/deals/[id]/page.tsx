@@ -16,9 +16,18 @@ function formatMontant(value: number | null) {
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase text-zinc-500">{label}</dt>
-      <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">{value ?? "—"}</dd>
+      <dt className="text-xs font-semibold uppercase tracking-wide text-sonate-muted">{label}</dt>
+      <dd className="mt-0.5 text-sm text-sonate-green dark:text-sonate-cream">{value ?? "—"}</dd>
     </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-6 rounded-2xl border border-sonate-green/10 bg-white p-5 dark:border-sonate-cream/10 dark:bg-sonate-green-light">
+      <h2 className="mb-4 text-xs font-bold uppercase tracking-wide text-sonate-orange">{title}</h2>
+      {children}
+    </section>
   );
 }
 
@@ -37,22 +46,21 @@ export default async function DealDetailPage({
   const { deal, company, contacts, otherDeals } = detail;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6">
-      <Link href="/deals" className="text-sm text-zinc-500 hover:underline">
+    <div className="mx-auto max-w-4xl px-4 py-8">
+      <Link href="/deals" className="text-sm font-medium text-sonate-muted hover:text-sonate-orange">
         ← Retour à la liste
       </Link>
 
-      <h1 className="mt-2 mb-6 text-xl font-semibold">{company?.name}</h1>
+      <h1 className="mt-2 mb-6 text-2xl font-extrabold tracking-tight">{company?.name}</h1>
 
-      <section className="mb-6 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-3 text-sm font-semibold text-zinc-500">Entreprise</h2>
+      <Section title="Entreprise">
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           <Field label="Nom" value={company?.name} />
           <Field
             label="Site web"
             value={
               company?.website ? (
-                <a href={company.website} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline dark:text-blue-400">
+                <a href={company.website} target="_blank" rel="noreferrer" className="text-sonate-orange hover:underline">
                   {company.website}
                 </a>
               ) : null
@@ -64,7 +72,7 @@ export default async function DealDetailPage({
             label="LinkedIn"
             value={
               company?.linkedinUrl ? (
-                <a href={company.linkedinUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline dark:text-blue-400">
+                <a href={company.linkedinUrl} target="_blank" rel="noreferrer" className="text-sonate-orange hover:underline">
                   {company.linkedinUrl}
                 </a>
               ) : null
@@ -73,31 +81,30 @@ export default async function DealDetailPage({
           <Field label="Source système" value={company?.sourceSystem} />
           <Field label="Créée le" value={formatDate(company?.createdAt ?? null)} />
         </dl>
-      </section>
+      </Section>
 
-      <section className="mb-6 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-3 text-sm font-semibold text-zinc-500">
-          Contact{contacts.length > 1 ? "s" : ""}
-        </h2>
+      <Section title={`Contact${contacts.length > 1 ? "s" : ""}`}>
         <div className="space-y-3">
           {contacts.map((c) => (
-            <dl key={c.id} className="grid grid-cols-2 gap-4 border-b border-zinc-100 pb-3 last:border-0 last:pb-0 sm:grid-cols-4 dark:border-zinc-800">
+            <dl
+              key={c.id}
+              className="grid grid-cols-2 gap-4 border-b border-sonate-green/5 pb-3 last:border-0 last:pb-0 sm:grid-cols-4 dark:border-sonate-cream/5"
+            >
               <Field label="Nom" value={c.fullName} />
               <Field label="Email" value={c.email} />
               <Field label="Téléphone" value={c.phone} />
               <Field label="Rôle" value={c.role} />
             </dl>
           ))}
-          {contacts.length === 0 && <p className="text-sm text-zinc-500">Aucun contact.</p>}
+          {contacts.length === 0 && <p className="text-sm text-sonate-muted">Aucun contact.</p>}
         </div>
-      </section>
+      </Section>
 
-      <section className="mb-6 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-3 text-sm font-semibold text-zinc-500">Deal</h2>
+      <Section title="Deal">
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           <Field label="Statut" value={deal.status ? DEAL_STATUS_LABELS[deal.status] : null} />
           <Field label="Qualification" value={deal.qualification} />
-          <Field label="Score" value={deal.score} />
+          <Field label="Score" value={<span className="font-bold text-sonate-orange">{deal.score}</span>} />
           <Field label="Owner" value={deal.owner} />
           <Field label="Source" value={deal.source} />
           <Field label="Montant devis" value={formatMontant(deal.montantDevis)} />
@@ -113,21 +120,20 @@ export default async function DealDetailPage({
           <Field label="Raison de refus" value={deal.raisonDeRefus} />
           <Field label="Message" value={deal.message} />
         </dl>
-      </section>
+      </Section>
 
       {otherDeals.length > 0 && (
-        <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-3 text-sm font-semibold text-zinc-500">Autres deals de cette entreprise</h2>
+        <Section title="Autres deals de cette entreprise">
           <ul className="space-y-1 text-sm">
             {otherDeals.map((d) => (
               <li key={d.id}>
-                <Link href={`/deals/${d.id}`} className="text-blue-600 hover:underline dark:text-blue-400">
+                <Link href={`/deals/${d.id}`} className="text-sonate-orange hover:underline">
                   Deal #{d.id} — {d.status ? DEAL_STATUS_LABELS[d.status] : "sans statut"} ({formatDate(d.createdAt)})
                 </Link>
               </li>
             ))}
           </ul>
-        </section>
+        </Section>
       )}
     </div>
   );
