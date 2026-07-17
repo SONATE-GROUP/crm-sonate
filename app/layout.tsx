@@ -21,17 +21,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" className={`${jakarta.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-sonate-cream text-sonate-green dark:bg-sonate-green dark:text-sonate-cream">
-        <header className="border-b border-sonate-green/10 bg-sonate-cream dark:border-sonate-cream/10 dark:bg-sonate-green">
-          <div className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-4">
-            <Link href="/companies" className="flex flex-col leading-none">
-              <span className="text-2xl font-extrabold tracking-tight">Sonate</span>
-              <span className="text-[11px] font-medium text-sonate-muted">CRM interne</span>
-            </Link>
-            <NavLinks />
+      <body className="flex min-h-full bg-sonate-cream text-sonate-green">
+        <aside className="flex w-64 shrink-0 flex-col bg-sonate-green text-sonate-cream">
+          <Link href="/companies" className="flex flex-col px-6 py-6 leading-none">
+            <span className="text-2xl font-extrabold tracking-tight">Sonate</span>
+            <span className="mt-0.5 text-[11px] font-medium text-sonate-cream/60">CRM interne</span>
+          </Link>
+          <div className="px-6 pb-2 text-[11px] font-semibold uppercase tracking-wide text-sonate-cream/40">
+            Pipeline
           </div>
-        </header>
-        <main className="flex-1">{children}</main>
+          <NavLinks />
+        </aside>
+        <div className="min-w-0 flex-1">
+          <main>{children}</main>
+        </div>
       </body>
     </html>
   );

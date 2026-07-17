@@ -1,9 +1,11 @@
 import Link from "next/link";
 
 import { B2B_B2C_VALUES, SOURCE_SYSTEM_VALUES, type B2bB2c, type SourceSystem } from "@/db/schema";
-import { listCompanies, PAGE_SIZE } from "@/lib/queries";
+import { listCompanies, getCompanyStats, PAGE_SIZE } from "@/lib/queries";
 import { fieldClass, labelClass } from "@/lib/ui";
 import { Pagination } from "@/components/Pagination";
+import { PageHeader } from "@/components/PageHeader";
+import { StatCard } from "@/components/StatCard";
 
 function isB2bB2c(value: string): value is B2bB2c {
   return (B2B_B2C_VALUES as readonly string[]).includes(value);
@@ -32,15 +34,32 @@ export default async function CompaniesPage({
   const b2bB2c = b2bB2cParam && isB2bB2c(b2bB2cParam) ? b2bB2cParam : undefined;
   const sourceSystem = sourceSystemParam && isSourceSystem(sourceSystemParam) ? sourceSystemParam : undefined;
 
-  const { rows, total, pageCount } = await listCompanies({ q, b2bB2c, sourceSystem, page });
+  const [{ rows, total, pageCount }, stats] = await Promise.all([
+    listCompanies({ q, b2bB2c, sourceSystem, page }),
+    getCompanyStats(),
+  ]);
 
   const currentParams = { q, b2bB2c: b2bB2cParam, sourceSystem: sourceSystemParam };
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="mb-5 text-2xl font-extrabold tracking-tight">Entreprises</h1>
+      <PageHeader
+        title="Entreprises"
+        meta={
+          stats.lastImport
+            ? { label: "Dernier import", value: stats.lastImport.toLocaleDateString("fr-FR") }
+            : undefined
+        }
+      />
 
-      <form className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-sonate-green/10 bg-white p-4 dark:border-sonate-cream/10 dark:bg-sonate-green-light sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard label="Entreprises" value={stats.total} />
+        <StatCard label="Contacts" value={stats.totalContacts} />
+        <StatCard label="B2B" value={stats.b2b} tone="orange" />
+        <StatCard label="B2C" value={stats.b2c} tone="orange" />
+      </div>
+
+      <form className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-sonate-green/10 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="lg:col-span-2">
           <label className={labelClass}>Recherche</label>
           <input
@@ -80,7 +99,7 @@ export default async function CompaniesPage({
           </button>
           <Link
             href="/companies"
-            className="rounded-full border border-sonate-green/20 px-5 py-2 text-sm font-semibold text-sonate-green dark:border-sonate-cream/30 dark:text-sonate-cream"
+            className="rounded-full border border-sonate-green/20 px-5 py-2 text-sm font-semibold text-sonate-green"
           >
             Réinitialiser
           </Link>
@@ -91,9 +110,9 @@ export default async function CompaniesPage({
         {total} résultat{total !== 1 ? "s" : ""}
       </p>
 
-      <div className="overflow-x-auto rounded-2xl border border-sonate-green/10 bg-white dark:border-sonate-cream/10 dark:bg-sonate-green-light">
+      <div className="overflow-x-auto rounded-2xl border border-sonate-green/10 bg-white">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-sonate-green/10 text-xs font-semibold uppercase tracking-wide text-sonate-muted dark:border-sonate-cream/10">
+          <thead className="border-b border-sonate-green/10 bg-sonate-green/5 text-xs font-semibold uppercase tracking-wide text-sonate-muted">
             <tr>
               <th className="px-4 py-3">Entreprise</th>
               <th className="px-4 py-3">Secteur</th>
@@ -106,10 +125,7 @@ export default async function CompaniesPage({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr
-                key={row.id}
-                className="border-b border-sonate-green/5 last:border-0 hover:bg-sonate-orange/5 dark:border-sonate-cream/5 dark:hover:bg-sonate-cream/5"
-              >
+              <tr key={row.id} className="border-b border-sonate-green/5 last:border-0 hover:bg-sonate-orange/5">
                 <td className="px-4 py-3">
                   <Link href={`/companies/${row.id}`} className="font-semibold hover:text-sonate-orange">
                     {row.name}

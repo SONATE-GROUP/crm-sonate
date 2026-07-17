@@ -254,3 +254,82 @@ async function _getDealDetail(id: number) {
   return { deal, company, contacts: companyContacts, otherDeals: companyDeals.filter((d) => d.id !== id) };
 }
 export const getDealDetail = unstable_cache(_getDealDetail, ["get-deal-detail"], { revalidate: REVALIDATE_SECONDS });
+
+function toDate(epochSeconds: number | null): Date | null {
+  return epochSeconds !== null ? new Date(epochSeconds * 1000) : null;
+}
+
+export type DealStats = { total: number; gagne: number; perdu: number; avgScore: number | null; lastImport: Date | null };
+
+async function _getDealStats(): Promise<DealStats> {
+  const [row] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      gagne: sql<number>`sum(case when ${deals.status} = 'gagne' then 1 else 0 end)`,
+      perdu: sql<number>`sum(case when ${deals.status} = 'perdu' then 1 else 0 end)`,
+      avgScore: sql<number | null>`avg(${deals.score})`,
+      lastImport: sql<number | null>`max(${deals.createdAt})`,
+    })
+    .from(deals);
+  return {
+    total: row.total,
+    gagne: row.gagne,
+    perdu: row.perdu,
+    avgScore: row.avgScore !== null ? Math.round(row.avgScore * 10) / 10 : null,
+    lastImport: toDate(row.lastImport),
+  };
+}
+export const getDealStats = unstable_cache(_getDealStats, ["deal-stats"], { revalidate: REVALIDATE_SECONDS });
+
+export type CompanyStats = {
+  total: number;
+  totalContacts: number;
+  b2b: number;
+  b2c: number;
+  mixte: number;
+  lastImport: Date | null;
+};
+
+async function _getCompanyStats(): Promise<CompanyStats> {
+  const [[row], [{ totalContacts }]] = await Promise.all([
+    db
+      .select({
+        total: sql<number>`count(*)`,
+        b2b: sql<number>`sum(case when ${companies.b2bB2c} = 'b2b' then 1 else 0 end)`,
+        b2c: sql<number>`sum(case when ${companies.b2bB2c} = 'b2c' then 1 else 0 end)`,
+        mixte: sql<number>`sum(case when ${companies.b2bB2c} = 'mixte' then 1 else 0 end)`,
+        lastImport: sql<number | null>`max(${companies.createdAt})`,
+      })
+      .from(companies),
+    db.select({ totalContacts: sql<number>`count(*)` }).from(contacts),
+  ]);
+  return {
+    total: row.total,
+    totalContacts,
+    b2b: row.b2b,
+    b2c: row.b2c,
+    mixte: row.mixte,
+    lastImport: toDate(row.lastImport),
+  };
+}
+export const getCompanyStats = unstable_cache(_getCompanyStats, ["company-stats"], { revalidate: REVALIDATE_SECONDS });
+
+export type ContactStats = { total: number; withEmail: number; withPhone: number; lastImport: Date | null };
+
+async function _getContactStats(): Promise<ContactStats> {
+  const [row] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      withEmail: sql<number>`sum(case when ${contacts.email} is not null then 1 else 0 end)`,
+      withPhone: sql<number>`sum(case when ${contacts.phone} is not null then 1 else 0 end)`,
+      lastImport: sql<number | null>`max(${contacts.createdAt})`,
+    })
+    .from(contacts);
+  return {
+    total: row.total,
+    withEmail: row.withEmail,
+    withPhone: row.withPhone,
+    lastImport: toDate(row.lastImport),
+  };
+}
+export const getContactStats = unstable_cache(_getContactStats, ["contact-stats"], { revalidate: REVALIDATE_SECONDS });

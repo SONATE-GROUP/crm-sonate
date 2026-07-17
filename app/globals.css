@@ -10,6 +10,7 @@
   --color-sonate-orange: #f15a2b;
   --color-sonate-orange-dark: #d8481c;
   --color-sonate-muted: #6b7f72;
+  --color-sonate-red: #9c2b2b;
 }
 
 @theme inline {
@@ -21,14 +22,8 @@
   --color-sonate-orange: var(--color-sonate-orange);
   --color-sonate-orange-dark: var(--color-sonate-orange-dark);
   --color-sonate-muted: var(--color-sonate-muted);
+  --color-sonate-red: var(--color-sonate-red);
   --font-sans: var(--font-jakarta);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #16291f;
-    --foreground: #f6f1e4;
-  }
 }
 
 body {

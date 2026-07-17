@@ -26,7 +26,7 @@ export function Pagination({
         {page > 1 && (
           <Link
             href={buildHref(basePath, params, page - 1)}
-            className="rounded-full border border-sonate-green/20 px-4 py-1.5 font-medium dark:border-sonate-cream/30"
+            className="rounded-full border border-sonate-green/20 px-4 py-1.5 font-medium"
           >
             Précédent
           </Link>
@@ -34,7 +34,7 @@ export function Pagination({
         {page < pageCount && (
           <Link
             href={buildHref(basePath, params, page + 1)}
-            className="rounded-full border border-sonate-green/20 px-4 py-1.5 font-medium dark:border-sonate-cream/30"
+            className="rounded-full border border-sonate-green/20 px-4 py-1.5 font-medium"
           >
             Suivant
           </Link>

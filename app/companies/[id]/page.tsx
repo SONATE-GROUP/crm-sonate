@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { DEAL_STATUS_LABELS } from "@/db/schema";
 import { getCompanyDetail } from "@/lib/queries";
 import { Field, Section } from "@/components/DetailSection";
+import { StatusBadge } from "@/components/StatusBadge";
 
 function formatDate(value: Date | null) {
   return value ? new Date(value).toLocaleDateString("fr-FR") : "—";
@@ -66,7 +66,7 @@ export default async function CompanyDetailPage({
           {contacts.map((c) => (
             <dl
               key={c.id}
-              className="grid grid-cols-2 gap-4 border-b border-sonate-green/5 pb-3 last:border-0 last:pb-0 sm:grid-cols-4 dark:border-sonate-cream/5"
+              className="grid grid-cols-2 gap-4 border-b border-sonate-green/5 pb-3 last:border-0 last:pb-0 sm:grid-cols-4"
             >
               <Field label="Nom" value={c.fullName} />
               <Field label="Email" value={c.email} />
@@ -79,13 +79,16 @@ export default async function CompanyDetailPage({
       </Section>
 
       <Section title={`Deals (${deals.length})`}>
-        <ul className="space-y-1 text-sm">
+        <ul className="space-y-2 text-sm">
           {deals.map((d) => (
-            <li key={d.id} className="flex items-center justify-between border-b border-sonate-green/5 py-2 last:border-0 dark:border-sonate-cream/5">
-              <Link href={`/deals/${d.id}`} className="font-medium text-sonate-orange hover:underline">
-                Deal #{d.id} — {d.status ? DEAL_STATUS_LABELS[d.status] : "sans statut"}
+            <li key={d.id} className="flex items-center justify-between border-b border-sonate-green/5 py-2 last:border-0">
+              <Link href={`/deals/${d.id}`} className="font-medium text-sonate-green hover:text-sonate-orange">
+                Deal #{d.id}
               </Link>
-              <span className="text-sonate-muted">{formatDate(d.createdAt)}</span>
+              <div className="flex items-center gap-3">
+                {d.status ? <StatusBadge status={d.status} /> : <span className="text-sonate-muted">sans statut</span>}
+                <span className="text-sonate-muted">{formatDate(d.createdAt)}</span>
+              </div>
             </li>
           ))}
           {deals.length === 0 && <p className="text-sm text-sonate-muted">Aucun deal.</p>}

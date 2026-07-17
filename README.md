@@ -97,7 +97,8 @@ statuts non reconnus, valeurs de "Source" non catégorisées.
 
 ## Application (lecture seule)
 
-Trois onglets, charte graphique Sonate (vert sapin / crème / orange) :
+Sidebar de navigation (3 onglets) façon dashboard interne Sonate, cartes de
+stats en haut de chaque liste, badges de statut colorés :
 
 - `/companies` + `/companies/[id]` : liste des entreprises (recherche nom/site/secteur,
   filtres B2B/B2C et source système) et fiche détail (infos entreprise, tous
