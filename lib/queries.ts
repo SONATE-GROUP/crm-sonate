@@ -2,14 +2,17 @@ import { unstable_cache } from "next/cache";
 import { and, asc, desc, eq, gte, like, or, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { companies, contacts, deals, type DealStatus, type B2bB2c, type SourceSystem } from "@/db/schema";
+import { companies, contacts, deals, pendingLeads, type DealStatus, type B2bB2c, type SourceSystem } from "@/db/schema";
 
 export const PAGE_SIZE = 50;
 
-// Les données ne changent que via une ré-exécution manuelle du script d'import
-// (pas d'écriture depuis l'app, lecture seule) : un court cache limite les
-// allers-retours réseau vers Turso sans risquer une fraîcheur perçue dégradée.
+// Les données changent maintenant aussi via l'ingestion live (lib/ingest.ts)
+// et les actions de fusion (lib/actions.ts), en plus du script d'import batch.
+// Un court cache reste pertinent (l'appli reste très majoritairement en
+// lecture), mais toute mutation doit invalider ce tag pour rester cohérente
+// avant l'expiration des 30s — cf. revalidateTag("crm-data") côté écriture.
 const REVALIDATE_SECONDS = 30;
+const CACHE_TAGS = ["crm-data"];
 
 export type DealListFilters = {
   q?: string;
@@ -95,7 +98,7 @@ async function _listDeals(filters: DealListFilters) {
   const count = countRows[0].count;
   return { rows, total: count, page, pageCount: Math.max(1, Math.ceil(count / PAGE_SIZE)) };
 }
-export const listDeals = unstable_cache(_listDeals, ["list-deals"], { revalidate: REVALIDATE_SECONDS });
+export const listDeals = unstable_cache(_listDeals, ["list-deals"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });
 
 async function _listOwners() {
   const rows = await db
@@ -106,7 +109,7 @@ async function _listOwners() {
     .orderBy(asc(deals.owner));
   return rows.map((r) => r.owner!).filter(Boolean);
 }
-export const listOwners = unstable_cache(_listOwners, ["list-owners"], { revalidate: REVALIDATE_SECONDS });
+export const listOwners = unstable_cache(_listOwners, ["list-owners"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });
 
 export type CompanyListFilters = {
   q?: string;
@@ -142,10 +145,17 @@ async function _listCompanies(filters: CompanyListFilters) {
   const contactCount = db.$with("contact_count").as(
     db.select({ companyId: contacts.companyId, contactN: sql<number>`count(*)`.as("contact_n") }).from(contacts).groupBy(contacts.companyId)
   );
+  const pendingCount = db.$with("pending_count").as(
+    db
+      .select({ companyId: pendingLeads.matchedCompanyId, pendingN: sql<number>`count(*)`.as("pending_n") })
+      .from(pendingLeads)
+      .where(eq(pendingLeads.status, "pending"))
+      .groupBy(pendingLeads.matchedCompanyId)
+  );
 
   const [rows, countRows] = await Promise.all([
     db
-      .with(dealCount, contactCount)
+      .with(dealCount, contactCount, pendingCount)
       .select({
         id: companies.id,
         name: companies.name,
@@ -156,10 +166,12 @@ async function _listCompanies(filters: CompanyListFilters) {
         createdAt: companies.createdAt,
         dealsCount: sql<number>`coalesce(${dealCount.dealN}, 0)`,
         contactsCount: sql<number>`coalesce(${contactCount.contactN}, 0)`,
+        pendingCount: sql<number>`coalesce(${pendingCount.pendingN}, 0)`,
       })
       .from(companies)
       .leftJoin(dealCount, eq(dealCount.companyId, companies.id))
       .leftJoin(contactCount, eq(contactCount.companyId, companies.id))
+      .leftJoin(pendingCount, eq(pendingCount.companyId, companies.id))
       .where(where)
       .orderBy(desc(companies.createdAt))
       .limit(PAGE_SIZE)
@@ -170,21 +182,41 @@ async function _listCompanies(filters: CompanyListFilters) {
   const count = countRows[0].count;
   return { rows, total: count, page, pageCount: Math.max(1, Math.ceil(count / PAGE_SIZE)) };
 }
-export const listCompanies = unstable_cache(_listCompanies, ["list-companies"], { revalidate: REVALIDATE_SECONDS });
+export const listCompanies = unstable_cache(_listCompanies, ["list-companies"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });
+
+export type PendingLead = {
+  id: number;
+  matchedContactId: number | null;
+  createdAt: Date;
+  payload: import("@/lib/ingest").LeadPayload;
+};
 
 async function _getCompanyDetail(id: number) {
   const [company] = await db.select().from(companies).where(eq(companies.id, id)).limit(1);
   if (!company) return null;
 
-  const [companyContacts, companyDeals] = await Promise.all([
+  const [companyContacts, companyDeals, pending] = await Promise.all([
     db.select().from(contacts).where(eq(contacts.companyId, id)).orderBy(asc(contacts.id)),
     db.select().from(deals).where(eq(deals.companyId, id)).orderBy(desc(deals.createdAt)),
+    db
+      .select()
+      .from(pendingLeads)
+      .where(and(eq(pendingLeads.matchedCompanyId, id), eq(pendingLeads.status, "pending")))
+      .orderBy(desc(pendingLeads.createdAt)),
   ]);
 
-  return { company, contacts: companyContacts, deals: companyDeals };
+  const pendingParsed: PendingLead[] = pending.map((p) => ({
+    id: p.id,
+    matchedContactId: p.matchedContactId,
+    createdAt: p.createdAt,
+    payload: JSON.parse(p.rawPayload),
+  }));
+
+  return { company, contacts: companyContacts, deals: companyDeals, pendingLeads: pendingParsed };
 }
 export const getCompanyDetail = unstable_cache(_getCompanyDetail, ["get-company-detail"], {
   revalidate: REVALIDATE_SECONDS,
+  tags: CACHE_TAGS,
 });
 
 export type ContactListFilters = {
@@ -212,8 +244,17 @@ async function _listContacts(filters: ContactListFilters) {
   const page = Math.max(1, filters.page ?? 1);
   const where = buildContactsWhere(filters);
 
+  const pendingCount = db.$with("pending_count").as(
+    db
+      .select({ contactId: pendingLeads.matchedContactId, pendingN: sql<number>`count(*)`.as("pending_n") })
+      .from(pendingLeads)
+      .where(eq(pendingLeads.status, "pending"))
+      .groupBy(pendingLeads.matchedContactId)
+  );
+
   const [rows, countRows] = await Promise.all([
     db
+      .with(pendingCount)
       .select({
         id: contacts.id,
         fullName: contacts.fullName,
@@ -222,9 +263,11 @@ async function _listContacts(filters: ContactListFilters) {
         role: contacts.role,
         companyId: companies.id,
         companyName: companies.name,
+        pendingCount: sql<number>`coalesce(${pendingCount.pendingN}, 0)`,
       })
       .from(contacts)
       .innerJoin(companies, eq(contacts.companyId, companies.id))
+      .leftJoin(pendingCount, eq(pendingCount.contactId, contacts.id))
       .where(where)
       .orderBy(asc(contacts.fullName))
       .limit(PAGE_SIZE)
@@ -239,7 +282,7 @@ async function _listContacts(filters: ContactListFilters) {
   const count = countRows[0].count;
   return { rows, total: count, page, pageCount: Math.max(1, Math.ceil(count / PAGE_SIZE)) };
 }
-export const listContacts = unstable_cache(_listContacts, ["list-contacts"], { revalidate: REVALIDATE_SECONDS });
+export const listContacts = unstable_cache(_listContacts, ["list-contacts"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });
 
 async function _getContactDetail(id: number) {
   const [contact] = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
@@ -254,6 +297,7 @@ async function _getContactDetail(id: number) {
 }
 export const getContactDetail = unstable_cache(_getContactDetail, ["get-contact-detail"], {
   revalidate: REVALIDATE_SECONDS,
+  tags: CACHE_TAGS,
 });
 
 async function _getDealDetail(id: number) {
@@ -268,7 +312,7 @@ async function _getDealDetail(id: number) {
 
   return { deal, company, contacts: companyContacts, otherDeals: companyDeals.filter((d) => d.id !== id) };
 }
-export const getDealDetail = unstable_cache(_getDealDetail, ["get-deal-detail"], { revalidate: REVALIDATE_SECONDS });
+export const getDealDetail = unstable_cache(_getDealDetail, ["get-deal-detail"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });
 
 function toDate(epochSeconds: number | null): Date | null {
   return epochSeconds !== null ? new Date(epochSeconds * 1000) : null;
@@ -294,7 +338,7 @@ async function _getDealStats(): Promise<DealStats> {
     lastImport: toDate(row.lastImport),
   };
 }
-export const getDealStats = unstable_cache(_getDealStats, ["deal-stats"], { revalidate: REVALIDATE_SECONDS });
+export const getDealStats = unstable_cache(_getDealStats, ["deal-stats"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });
 
 export type CompanyStats = {
   total: number;
@@ -327,7 +371,7 @@ async function _getCompanyStats(): Promise<CompanyStats> {
     lastImport: toDate(row.lastImport),
   };
 }
-export const getCompanyStats = unstable_cache(_getCompanyStats, ["company-stats"], { revalidate: REVALIDATE_SECONDS });
+export const getCompanyStats = unstable_cache(_getCompanyStats, ["company-stats"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });
 
 export type ContactStats = { total: number; withEmail: number; withPhone: number; lastImport: Date | null };
 
@@ -347,4 +391,4 @@ async function _getContactStats(): Promise<ContactStats> {
     lastImport: toDate(row.lastImport),
   };
 }
-export const getContactStats = unstable_cache(_getContactStats, ["contact-stats"], { revalidate: REVALIDATE_SECONDS });
+export const getContactStats = unstable_cache(_getContactStats, ["contact-stats"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });

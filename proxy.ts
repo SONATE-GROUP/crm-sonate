@@ -43,6 +43,9 @@ export function proxy(request: NextRequest) {
   return NextResponse.next();
 }
 
+// /api/* est exclu de l'auth Basic humaine : ces routes vérifient leur propre
+// clé API (cf. app/api/leads/route.ts), destinées à des appels machine
+// (Make/n8n), pas à un navigateur.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };

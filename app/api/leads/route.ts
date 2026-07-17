@@ -1,0 +1,50 @@
+import { NextResponse } from "next/server";
+import { after } from "next/server";
+import type { NextRequest } from "next/server";
+
+import { ingestLead, InvalidLeadPayloadError, type LeadPayload } from "@/lib/ingest";
+import { triggerEnrichment } from "@/lib/enrichment";
+
+/**
+ * Point d'entrée pour Make/n8n (ou tout autre système) : POST un lead, il est
+ * créé (+ enrichissement déclenché en arrière-plan) s'il est nouveau, ou mis
+ * en file d'attente de fusion s'il correspond à une fiche existante — voir
+ * lib/ingest.ts pour la logique, README.md pour le format de payload attendu.
+ *
+ * Authentification par clé API (indépendante de l'auth humaine de proxy.ts) :
+ * header "x-api-key" ou "Authorization: Bearer <clé>".
+ */
+export async function POST(request: NextRequest) {
+  const providedKey =
+    request.headers.get("x-api-key") ?? request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  const expectedKey = process.env.LEADS_API_KEY;
+
+  if (!expectedKey) {
+    console.error("LEADS_API_KEY n'est pas configurée côté serveur.");
+    return NextResponse.json({ error: "server_misconfigured" }, { status: 500 });
+  }
+  if (!providedKey || providedKey !== expectedKey) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  let payload: LeadPayload;
+  try {
+    payload = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  try {
+    const result = await ingestLead(payload);
+    if (result.outcome === "created") {
+      after(() => triggerEnrichment(result.companyId));
+    }
+    return NextResponse.json(result, { status: result.outcome === "created" ? 201 : 200 });
+  } catch (err) {
+    if (err instanceof InvalidLeadPayloadError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+    console.error(err);
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
+  }
+}

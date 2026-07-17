@@ -5,6 +5,7 @@ import { fieldClass, labelClass } from "@/lib/ui";
 import { Pagination } from "@/components/Pagination";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
+import { PendingBadge } from "@/components/PendingBadge";
 
 export default async function ContactsPage({
   searchParams,
@@ -90,6 +91,7 @@ export default async function ContactsPage({
                   <Link href={`/contacts/${row.id}`} className="font-semibold hover:text-sonate-orange">
                     {row.fullName}
                   </Link>
+                  <PendingBadge count={row.pendingCount} />
                 </td>
                 <td className="px-4 py-3">{row.email ?? "—"}</td>
                 <td className="px-4 py-3">{row.phone ?? "—"}</td>

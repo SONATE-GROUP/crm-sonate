@@ -4,8 +4,16 @@ import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 export const B2B_B2C_VALUES = ["b2b", "b2c", "mixte"] as const;
 export type B2bB2c = (typeof B2B_B2C_VALUES)[number];
 
-export const SOURCE_SYSTEM_VALUES = ["deuxio", "wedig", "letsclic"] as const;
+// "api" = lead créé via l'API d'ingestion live (Make/n8n), par opposition aux
+// imports batch depuis les exports Notion des 3 sources historiques.
+export const SOURCE_SYSTEM_VALUES = ["deuxio", "wedig", "letsclic", "api"] as const;
 export type SourceSystem = (typeof SOURCE_SYSTEM_VALUES)[number];
+
+export const ENRICHMENT_STATUS_VALUES = ["pending", "done", "failed"] as const;
+export type EnrichmentStatus = (typeof ENRICHMENT_STATUS_VALUES)[number];
+
+export const PENDING_LEAD_STATUS_VALUES = ["pending", "merged", "dismissed"] as const;
+export type PendingLeadStatus = (typeof PENDING_LEAD_STATUS_VALUES)[number];
 
 export const DEAL_STATUS_VALUES = [
   "devis_a_envoyer",
@@ -46,6 +54,11 @@ export const companies = sqliteTable("companies", {
   b2bB2c: text("b2b_b2c", { enum: B2B_B2C_VALUES }),
   linkedinUrl: text("linkedin_url"),
   sourceSystem: text("source_system", { enum: SOURCE_SYSTEM_VALUES }).notNull(),
+  // Renseigné pour les entreprises créées via l'API live, en attendant l'appel
+  // réel à Derrick App (cf. lib/enrichment.ts) : NULL pour les entreprises
+  // importées en batch, jamais enrichies automatiquement.
+  enrichmentStatus: text("enrichment_status", { enum: ENRICHMENT_STATUS_VALUES }),
+  enrichmentData: text("enrichment_data"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),
@@ -89,4 +102,23 @@ export const deals = sqliteTable("deals", {
   updatedAt: integer("updated_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),
+});
+
+/**
+ * File d'attente de fusion : un lead entrant (API live) dont l'email ou le
+ * nom d'entreprise correspond à une fiche déjà existante n'est jamais
+ * fusionné automatiquement — il atterrit ici, avec le payload brut reçu, en
+ * attendant qu'un utilisateur accepte ("Fusionner", cf. lib/actions.ts,
+ * ajoute un nouveau deal) ou rejette ("Ignorer") la proposition.
+ */
+export const pendingLeads = sqliteTable("pending_leads", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  matchedCompanyId: integer("matched_company_id").references(() => companies.id),
+  matchedContactId: integer("matched_contact_id").references(() => contacts.id),
+  rawPayload: text("raw_payload").notNull(),
+  status: text("status", { enum: PENDING_LEAD_STATUS_VALUES }).notNull().default("pending"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  resolvedAt: integer("resolved_at", { mode: "timestamp" }),
 });

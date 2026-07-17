@@ -6,6 +6,7 @@ import { fieldClass, labelClass } from "@/lib/ui";
 import { Pagination } from "@/components/Pagination";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
+import { PendingBadge } from "@/components/PendingBadge";
 
 function isB2bB2c(value: string): value is B2bB2c {
   return (B2B_B2C_VALUES as readonly string[]).includes(value);
@@ -130,6 +131,7 @@ export default async function CompaniesPage({
                   <Link href={`/companies/${row.id}`} className="font-semibold hover:text-sonate-orange">
                     {row.name}
                   </Link>
+                  <PendingBadge count={row.pendingCount} />
                   <div className="text-xs text-sonate-muted">{row.website ?? ""}</div>
                 </td>
                 <td className="px-4 py-3">{row.sector ?? "—"}</td>

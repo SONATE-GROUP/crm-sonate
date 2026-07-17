@@ -4,9 +4,15 @@ import { notFound } from "next/navigation";
 import { getCompanyDetail } from "@/lib/queries";
 import { Field, Section } from "@/components/DetailSection";
 import { StatusBadge } from "@/components/StatusBadge";
+import { mergePendingLead, dismissPendingLead } from "@/lib/actions";
+import { DEAL_STATUS_LABELS } from "@/db/schema";
 
 function formatDate(value: Date | null) {
   return value ? new Date(value).toLocaleDateString("fr-FR") : "—";
+}
+
+function formatDateTime(value: Date) {
+  return new Date(value).toLocaleString("fr-FR");
 }
 
 export default async function CompanyDetailPage({
@@ -21,7 +27,7 @@ export default async function CompanyDetailPage({
   const detail = await getCompanyDetail(companyId);
   if (!detail) notFound();
 
-  const { company, contacts, deals } = detail;
+  const { company, contacts, deals, pendingLeads } = detail;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -30,6 +36,53 @@ export default async function CompanyDetailPage({
       </Link>
 
       <h1 className="mt-2 mb-6 text-2xl font-extrabold tracking-tight">{company.name}</h1>
+
+      {pendingLeads.length > 0 && (
+        <section className="mb-6 rounded-2xl border border-sonate-orange/30 bg-sonate-orange/5 p-5">
+          <h2 className="mb-4 text-xs font-bold uppercase tracking-wide text-sonate-orange">
+            ⚠ Leads en attente de fusion ({pendingLeads.length})
+          </h2>
+          <div className="space-y-4">
+            {pendingLeads.map((pending) => (
+              <div key={pending.id} className="rounded-xl border border-sonate-orange/20 bg-white p-4">
+                <p className="mb-2 text-xs text-sonate-muted">Reçu le {formatDateTime(pending.createdAt)}</p>
+                <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                  {pending.payload.company.name !== company.name && (
+                    <Field label="Nom entreprise reçu" value={pending.payload.company.name} />
+                  )}
+                  <Field label="Contact" value={pending.payload.contact?.fullName} />
+                  <Field label="Email" value={pending.payload.contact?.email} />
+                  <Field label="Téléphone" value={pending.payload.contact?.phone} />
+                  <Field
+                    label="Statut deal"
+                    value={pending.payload.deal?.status ? DEAL_STATUS_LABELS[pending.payload.deal.status] : null}
+                  />
+                  <Field label="Score" value={pending.payload.deal?.score} />
+                  <Field label="Source" value={pending.payload.deal?.source} />
+                </dl>
+                <div className="mt-3 flex gap-2">
+                  <form action={mergePendingLead.bind(null, pending.id)}>
+                    <button
+                      type="submit"
+                      className="rounded-full bg-sonate-orange px-4 py-1.5 text-sm font-semibold text-sonate-cream hover:bg-sonate-orange-dark"
+                    >
+                      Fusionner (nouveau deal)
+                    </button>
+                  </form>
+                  <form action={dismissPendingLead.bind(null, pending.id)}>
+                    <button
+                      type="submit"
+                      className="rounded-full border border-sonate-green/20 px-4 py-1.5 text-sm font-semibold text-sonate-green"
+                    >
+                      Ignorer
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <Section title="Entreprise">
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">

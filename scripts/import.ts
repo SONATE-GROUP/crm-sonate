@@ -1,14 +1,13 @@
 import { readFileSync } from "node:fs";
 import { parse } from "csv-parse/sync";
 import { db } from "../db/client";
-import {
-  companies,
-  contacts,
-  deals,
-  SOURCE_SYSTEM_VALUES,
-  type DealStatus,
-  type SourceSystem,
-} from "../db/schema";
+import { companies, contacts, deals, type DealStatus, type SourceSystem } from "../db/schema";
+import { cleanText, normalizeCompanyKey, normalizeEmail } from "../lib/normalize";
+
+// Le CLI ne couvre que les 3 sources historiques d'import batch — "api" (leads
+// live via lib/ingest.ts) n'est délibérément pas accepté ici.
+const CSV_SOURCE_SYSTEMS = ["deuxio", "wedig", "letsclic"] as const;
+type CsvSourceSystem = (typeof CSV_SOURCE_SYSTEMS)[number];
 
 // --- CLI args ---------------------------------------------------------------
 
@@ -38,9 +37,9 @@ function requireArgs(): { csvPath: string; sourceSystem: SourceSystem } {
     );
     process.exit(1);
   }
-  if (!SOURCE_SYSTEM_VALUES.includes(args.source as SourceSystem)) {
+  if (!CSV_SOURCE_SYSTEMS.includes(args.source as CsvSourceSystem)) {
     console.error(
-      `--source invalide: "${args.source}". Valeurs acceptées: ${SOURCE_SYSTEM_VALUES.join(", ")}`
+      `--source invalide: "${args.source}". Valeurs acceptées: ${CSV_SOURCE_SYSTEMS.join(", ")}`
     );
     process.exit(1);
   }
@@ -50,34 +49,8 @@ function requireArgs(): { csvPath: string; sourceSystem: SourceSystem } {
 const { csvPath, sourceSystem } = requireArgs();
 
 // --- Normalisation helpers ---------------------------------------------------
-
-function cleanText(value: string | undefined): string | null {
-  const trimmed = (value ?? "").replace(/\s+/g, " ").trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-/** lower/trim, pour dédoublonnage d'emails. */
-function normalizeEmail(value: string | undefined): string | null {
-  const trimmed = (value ?? "").trim().toLowerCase();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-/**
- * Clé de dédoublonnage des entreprises: minuscule, accents/espaces/ponctuation
- * retirés entièrement (pas juste collapsés) pour que "Cap Bornes" et
- * "Capbornes" tombent sur la même clé. "@" est développé en "at" ("Wecare@work"
- * ~ "wecareatwork"), et le marqueur manuel "doublon" parfois collé au nom
- * ("Special Menuiseries / Doublon") est retiré avant normalisation.
- */
-function normalizeCompanyKey(value: string): string {
-  return value
-    .replace(/@/g, " at ")
-    .replace(/\bdoublon\b/gi, " ")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
-}
+// cleanText / normalizeEmail / normalizeCompanyKey viennent de lib/normalize.ts
+// (partagées avec l'ingestion live, cf. lib/ingest.ts).
 
 const B2B_B2C_MAP: Record<string, "b2b" | "b2c" | "mixte"> = {
   b2b: "b2b",

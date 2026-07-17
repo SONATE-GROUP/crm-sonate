@@ -113,6 +113,136 @@ stats en haut de chaque liste, badges de statut colorés :
   B2B/B2C, owner, score minimum, pagination) et fiche détail (deal, entreprise,
   contacts, autres deals de la même entreprise).
 
+## Base vivante — ingestion live des leads (`POST /api/leads`)
+
+En plus de l'import batch (CSV), la base peut recevoir de nouveaux leads en
+continu via un webhook HTTP — pensé pour être branché sur **Make ou n8n**,
+quelle que soit la source (formulaire, autre CRM, scraping, etc.).
+
+### Authentification
+
+Header `x-api-key` (ou `Authorization: Bearer <clé>`), comparé à la variable
+d'environnement `LEADS_API_KEY` :
+
+```
+LEADS_API_KEY=une-longue-clé-secrète-générée-aléatoirement
+```
+
+- Header absent ou clé incorrecte → `401`.
+- `LEADS_API_KEY` non configurée côté serveur → `500` (l'endpoint refuse de
+  tourner sans clé plutôt que d'accepter n'importe quelle requête).
+
+Cette route n'est **pas** protégée par l'auth basique humaine (`proxy.ts`
+exclut explicitement `/api/*`) : c'est un point d'entrée machine-à-machine
+avec son propre contrôle d'accès.
+
+### Payload
+
+```json
+{
+  "company": {
+    "name": "Acme SAS",
+    "website": "https://acme.fr",
+    "sector": "SaaS",
+    "b2bB2c": "b2b",
+    "linkedinUrl": "https://linkedin.com/company/acme",
+    "sourceSystem": "api"
+  },
+  "contact": {
+    "fullName": "Jeanne Dupont",
+    "email": "jeanne@acme.fr",
+    "phone": "0600000000",
+    "role": "CEO"
+  },
+  "deal": {
+    "status": "nouveau",
+    "qualification": "chaud",
+    "score": 80,
+    "montantDevis": 1500,
+    "panierMoyen": "100-500€",
+    "caMensuel": "10 000-50 000€",
+    "depenseMarketingMensuelle": "1 000-5 000€",
+    "besoinPrincipal": "Acquisition",
+    "kpiCible": "CA",
+    "message": "Lead entrant via formulaire site",
+    "owner": "Alice",
+    "source": "LinkedIn"
+  }
+}
+```
+
+Seul `company.name` est requis. `contact` et `deal` sont optionnels. Les
+champs non reconnus dans le payload sont simplement ignorés (pas de mapping
+dynamique en v1 — cf. `LeadPayload` dans `lib/ingest.ts` pour la liste
+exhaustive des champs supportés).
+
+### Logique de dédoublonnage
+
+Contrairement à l'import batch (qui réutilise silencieusement une entreprise/
+contact déjà connu), l'ingestion live **ne fusionne jamais automatiquement** :
+
+- **Aucune correspondance** (ni sur l'email du contact, ni sur le nom
+  d'entreprise normalisé) → création directe de l'entreprise (+ contact + deal
+  si fournis), puis déclenchement de l'enrichissement (voir plus bas).
+  Réponse `201`.
+- **Correspondance trouvée** (email de contact déjà connu, OU nom d'entreprise
+  qui normalise vers une entreprise existante) → rien n'est créé/modifié : le
+  lead atterrit dans une file d'attente (`pending_leads`) et une **alerte**
+  apparaît directement sur la ligne de l'entreprise/du contact concerné
+  (pastille orange "N en attente" dans les listes `/companies` et `/contacts`,
+  section détaillée en haut de la fiche entreprise). Réponse `200`.
+  - Depuis la fiche entreprise, deux actions : **Fusionner** (les nouvelles
+    données s'additionnent — nouveau contact si l'email n'était pas déjà
+    rattaché, et surtout un **nouveau deal**, jamais d'écrasement de champs
+    existants) ou **Ignorer** (le lead reste tracé en base mais n'est plus
+    proposé).
+
+⚠️ Le matching sur le nom d'entreprise charge actuellement toutes les
+entreprises en mémoire pour comparer la clé normalisée (la normalisation
+n'est pas exprimable en SQL) — acceptable jusqu'à quelques milliers
+d'entreprises ; à revoir (colonne `normalized_key` indexée) si le volume
+grossit significativement.
+
+### Enrichissement automatique (Derrick App)
+
+Chaque entreprise créée directement (sans correspondance) passe en
+`enrichmentStatus: "pending"` et l'enrichissement est déclenché en tâche de
+fond via `after()` (`next/server`) — la requête webhook répond immédiatement
+(`201`) sans attendre l'appel à l'API Derrick App. `lib/enrichment.ts`
+contient le point d'intégration ; **l'appel réel à l'API Derrick App n'est pas
+encore branché** (stub qui laisse `enrichmentStatus` à `"pending"`) — en
+attente de la documentation de l'API.
+
+⚠️ `after()` doit continuer à s'exécuter après l'envoi de la réponse HTTP
+même sur Netlify (Next Runtime) — à vérifier en conditions réelles après
+déploiement ; si l'enrichissement ne se déclenche jamais en prod alors qu'il
+fonctionne en local, c'est le premier suspect.
+
+### Invalidation du cache
+
+Les pages étant mises en cache (`unstable_cache`, cf. section Performance),
+`POST /api/leads` et les actions de fusion/rejet invalident le tag
+`crm-data` : `revalidateTag("crm-data", { expire: 0 })` côté route API
+(quasi-immédiat, hors Server Action), `updateTag("crm-data")` côté Server
+Actions (`lib/actions.ts`, immédiat — c'est la seule API garantissant une
+lecture cohérente juste après l'écriture dans ce contexte).
+
+### Variables d'environnement à ajouter
+
+En plus de `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` / `AUTH_USERS` déjà
+documentées : `LEADS_API_KEY` (dev : `.env.local`, prod : dashboard Netlify —
+générer une vraie clé aléatoire, ne pas réutiliser une valeur de test).
+
+### Migration de schéma à appliquer
+
+Cette fonctionnalité ajoute la table `pending_leads` et deux colonnes sur
+`companies` (`enrichment_status`, `enrichment_data`), ainsi qu'une nouvelle
+valeur `"api"` pour `source_system`. Sur la base Turso de prod, appliquer :
+
+```bash
+npx drizzle-kit push   # avec TURSO_DATABASE_URL/TURSO_AUTH_TOKEN de prod
+```
+
 ## Performance
 
 Les pages de liste/détail sont mises en cache côté serveur (`unstable_cache`,
