@@ -4,15 +4,10 @@ import { notFound } from "next/navigation";
 import { getCompanyDetail } from "@/lib/queries";
 import { Field, Section } from "@/components/DetailSection";
 import { StatusBadge } from "@/components/StatusBadge";
+import { EnrichmentPanel } from "@/components/EnrichmentPanel";
 import { mergePendingLead, dismissPendingLead } from "@/lib/actions";
-import { DEAL_STATUS_LABELS, type EnrichmentStatus } from "@/db/schema";
-import { parseEnrichmentSummary } from "@/lib/enrichment-display";
-
-const ENRICHMENT_STATUS_LABELS: Record<EnrichmentStatus, string> = {
-  pending: "En attente",
-  done: "Terminé",
-  failed: "Échoué",
-};
+import { DEAL_STATUS_LABELS } from "@/db/schema";
+import { getLatestRunsForEntity } from "@/lib/enrichment-runs";
 
 function formatDate(value: Date | null) {
   return value ? new Date(value).toLocaleDateString("fr-FR") : "—";
@@ -35,7 +30,7 @@ export default async function CompanyDetailPage({
   if (!detail) notFound();
 
   const { company, contacts, deals, pendingLeads } = detail;
-  const enrichment = parseEnrichmentSummary(company.enrichmentData);
+  const enrichmentRuns = await getLatestRunsForEntity("company", company.id);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -122,29 +117,14 @@ export default async function CompanyDetailPage({
         </dl>
       </Section>
 
-      {company.enrichmentStatus && (
-        <Section title="Enrichissement (Derrick App)">
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Field label="Statut" value={ENRICHMENT_STATUS_LABELS[company.enrichmentStatus]} />
-            {enrichment?.email && <Field label="Email trouvé" value={enrichment.email} />}
-            {enrichment?.phone && <Field label="Téléphone trouvé" value={enrichment.phone} />}
-            {enrichment?.linkedinUrl && (
-              <Field
-                label="LinkedIn"
-                value={
-                  <a href={enrichment.linkedinUrl} target="_blank" rel="noreferrer" className="text-sonate-orange hover:underline">
-                    {enrichment.linkedinUrl}
-                  </a>
-                }
-              />
-            )}
-            {enrichment?.industry && <Field label="Secteur (LinkedIn)" value={enrichment.industry} />}
-            {enrichment?.staffCountRange && <Field label="Effectif" value={enrichment.staffCountRange} />}
-            {enrichment?.followers !== undefined && <Field label="Followers LinkedIn" value={enrichment.followers} />}
-          </dl>
-          {enrichment?.description && <p className="mt-3 text-sm text-sonate-muted">{enrichment.description}</p>}
-        </Section>
-      )}
+      <Section title="Enrichissement (Derrick App)">
+        <EnrichmentPanel
+          entityType="company"
+          entityId={company.id}
+          runs={enrichmentRuns}
+          disabledReasons={company.website ? {} : { website_contact_social: "Pas de site web renseigné." }}
+        />
+      </Section>
 
       <Section title={`Contact${contacts.length > 1 ? "s" : ""} (${contacts.length})`}>
         <div className="space-y-3">

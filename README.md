@@ -224,44 +224,61 @@ n'est pas exprimable en SQL) — acceptable jusqu'à quelques milliers
 d'entreprises ; à revoir (colonne `normalized_key` indexée) si le volume
 grossit significativement.
 
-### Enrichissement automatique (Derrick App)
+### Enrichissement (Derrick App)
 
-Chaque entreprise créée directement (sans correspondance) passe en
-`enrichmentStatus: "pending"` et l'enrichissement est déclenché en tâche de
-fond via `after()` (`next/server`) : la requête webhook répond immédiatement
-(`201`) sans attendre les appels à l'API Derrick App. `lib/derrick.ts` est le
-client HTTP (voir la doc officielle pour le contrat complet : base URL
+`lib/derrick.ts` est le client HTTP pour l'API Derrick App (voir la doc
+officielle pour le contrat complet : base URL
 `https://app1.derrick-app.com/api/v1/`, header `x-api-key`, corps
-`{ "data": {...} }`, 60 req/min). `lib/enrichment.ts` orchestre trois appels,
-chacun tenté indépendamment (l'échec de l'un n'empêche pas les autres) :
+`{ "data": {...} }`, 60 req/min). La clé se configure depuis `/settings`
+(table `integration_settings`, stockée en clair : c'est nous qui devons la
+renvoyer à Derrick App, donc pas de hash possible ici, contrairement aux clés
+d'ingestion) ; aucun utilisateur "propriétaire" pour l'enrichissement
+automatique en tâche de fond, `getAnyIntegrationSetting()` prend la clé la
+plus récemment configurée, peu importe qui l'a saisie.
 
-1. Site web connu -> `website_contact_social` (email, téléphone, réseaux
-   sociaux).
-2. Pas d'URL LinkedIn connue -> `search_companies` (retrouve l'URL LinkedIn
-   à partir du nom).
-3. URL LinkedIn disponible (déjà connue ou trouvée à l'étape 2) ->
-   `enrich_companies` (données d'entreprise LinkedIn : secteur, effectif,
-   followers, description, etc.).
+Chaque tentative d'enrichissement (automatique ou manuelle, à l'unité ou en
+masse) est enregistrée dans `enrichment_runs` (une ligne par entité +
+type + tentative, historique conservé) : statut, résultat brut, message
+d'erreur, crédits consommés. `lib/enrichment-runs.ts` fournit
+`getLatestRunsForEntity()` pour lire le dernier résultat par type sur une
+fiche donnée.
 
-Le résultat brut (et les erreurs éventuelles par appel) est stocké dans
-`companies.enrichmentData` (JSON), `enrichmentStatus` passe à `"done"` si au
-moins un appel a renvoyé des données, `"failed"` sinon. Un résumé lisible est
-affiché sur la fiche entreprise (page complète et volet) via
-`lib/enrichment-display.ts`.
+**Automatique** : chaque entreprise créée directement via le webhook (sans
+correspondance, cf. plus haut) est enrichie en tâche de fond via `after()`
+(`next/server`) juste après la réponse au webhook (`lib/enrichment.ts`) :
+`website_contact_social` si un site web est connu, puis `search_companies` +
+`enrich_companies` pour les données LinkedIn entreprise.
 
-La clé Derrick App se configure depuis `/settings` (table
-`integration_settings`, stockée en clair : c'est nous qui devons la renvoyer
-à Derrick App, donc pas de hash possible ici, contrairement aux clés
-d'ingestion). L'enrichissement en tâche de fond n'a pas d'utilisateur
-connecté associé : `getAnyIntegrationSetting()` prend la clé la plus
-récemment configurée, peu importe qui l'a saisie. Si aucune clé n'est
-configurée, l'entreprise reste en `"pending"` indéfiniment (message dans les
-logs serveur).
+**Manuel, à l'unité ou en masse** : chaque fiche entreprise/contact affiche
+une section "Enrichissement (Derrick App)" (`components/EnrichmentPanel.tsx`)
+avec un bouton par type d'enrichissement disponible, affichant le coût en
+crédits avant de lancer et le résultat une fois fait :
+
+| Type | Entité | Coût max | Endpoint(s) Derrick |
+|---|---|---|---|
+| Contact & réseaux sociaux | Entreprise | 2 crédits | `website_contact_social` |
+| Données LinkedIn entreprise | Entreprise | 2 crédits | `search_companies` + `enrich_companies` |
+| Profil LinkedIn | Contact | 2 crédits | `search_linkedin_profile` + `enrich_profile` |
+| Email professionnel | Contact | 5 crédits | `find_email` |
+| Téléphone mobile | Contact | 150 crédits (le plus cher de l'API) | `find_phone` (nécessite un profil LinkedIn déjà trouvé) |
+| Vérification email | Contact | 1 crédit | `verify_email` (nécessite un email déjà connu) |
+
+Sur `/companies` et `/contacts`, des cases à cocher par ligne font apparaître
+une barre d'action (`components/BulkEnrichBar.tsx`) pour lancer un type
+d'enrichissement sur toute la sélection : confirmation avec le coût total
+estimé, puis traitement séquentiel avec ~1,1s entre deux appels (marge sous
+la limite de 60 req/min de Derrick, y compris pour les types qui font 2
+appels par fiche), barre de progression, bouton pour arrêter en cours de
+route. Le champ correspondant (email, téléphone, URL LinkedIn) n'est
+renseigné automatiquement sur la fiche que s'il était vide ; une valeur déjà
+présente n'est jamais écrasée par le résultat d'un enrichissement.
 
 ⚠️ `after()` doit continuer à s'exécuter après l'envoi de la réponse HTTP
 même sur Netlify (Next Runtime) — à vérifier en conditions réelles après
-déploiement ; si l'enrichissement ne se déclenche jamais en prod alors qu'il
-fonctionne en local, c'est le premier suspect.
+déploiement ; si l'enrichissement automatique ne se déclenche jamais en prod
+alors qu'il fonctionne en local, c'est le premier suspect. L'enrichissement
+manuel (bouton par fiche, sélection en masse) n'est pas concerné puisqu'il
+est déclenché directement par un clic, sans passer par `after()`.
 
 ### Invalidation du cache
 
@@ -289,11 +306,10 @@ usages — c'est tout l'intérêt de cette page. (`TURSO_DATABASE_URL` /
 `TURSO_AUTH_TOKEN` / `AUTH_USERS` restent des variables d'environnement,
 elles, car nécessaires avant même qu'un compte existe pour se connecter.)
 
-### Migration de schéma à appliquer
+### Migrations de schéma
 
-Cette fonctionnalité ajoute la table `pending_leads` et deux colonnes sur
-`companies` (`enrichment_status`, `enrichment_data`), ainsi qu'une nouvelle
-valeur `"api"` pour `source_system`. Sur la base Turso de prod, appliquer :
+Chaque évolution du schéma (`db/schema.ts`) nécessite d'appliquer la
+migration correspondante sur la base Turso de prod après le déploiement :
 
 ```bash
 npx drizzle-kit push   # avec TURSO_DATABASE_URL/TURSO_AUTH_TOKEN de prod

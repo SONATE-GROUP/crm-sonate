@@ -6,7 +6,7 @@ import { fieldClass, labelClass } from "@/lib/ui";
 import { Pagination } from "@/components/Pagination";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
-import { PendingBadge } from "@/components/PendingBadge";
+import { CompaniesTable } from "@/components/CompaniesTable";
 
 function isB2bB2c(value: string): value is B2bB2c {
   return (B2B_B2C_VALUES as readonly string[]).includes(value);
@@ -111,49 +111,7 @@ export default async function CompaniesPage({
         {total} résultat{total !== 1 ? "s" : ""}
       </p>
 
-      <div className="overflow-x-auto rounded-2xl border border-sonate-green/10 bg-white">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-sonate-green/10 bg-sonate-green/5 text-xs font-semibold uppercase tracking-wide text-sonate-muted">
-            <tr>
-              <th className="px-4 py-3">Entreprise</th>
-              <th className="px-4 py-3">Secteur</th>
-              <th className="px-4 py-3">B2B/B2C</th>
-              <th className="px-4 py-3">Source</th>
-              <th className="px-4 py-3">Contacts</th>
-              <th className="px-4 py-3">Deals</th>
-              <th className="px-4 py-3">Créée le</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-b border-sonate-green/5 last:border-0 hover:bg-sonate-orange/5">
-                <td className="px-4 py-3">
-                  <Link href={`/companies/${row.id}`} className="font-semibold hover:text-sonate-orange">
-                    {row.name}
-                  </Link>
-                  <PendingBadge count={row.pendingCount} />
-                  <div className="text-xs text-sonate-muted">{row.website ?? ""}</div>
-                </td>
-                <td className="px-4 py-3">{row.sector ?? "—"}</td>
-                <td className="px-4 py-3">{row.b2bB2c ?? "—"}</td>
-                <td className="px-4 py-3">{row.sourceSystem}</td>
-                <td className="px-4 py-3">{row.contactsCount}</td>
-                <td className="px-4 py-3">{row.dealsCount}</td>
-                <td className="px-4 py-3 text-sonate-muted">
-                  {row.createdAt ? new Date(row.createdAt).toLocaleDateString("fr-FR") : "—"}
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sonate-muted">
-                  Aucun résultat pour ces filtres.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <CompaniesTable rows={rows} />
 
       <Pagination basePath="/companies" params={currentParams} page={page} pageCount={pageCount} pageSize={PAGE_SIZE} />
     </div>

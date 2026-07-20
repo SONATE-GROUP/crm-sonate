@@ -5,6 +5,8 @@ import { getContactDetail } from "@/lib/queries";
 import { Drawer } from "@/components/Drawer";
 import { DrawerSection, DrawerRow } from "@/components/DrawerSection";
 import { StatusBadge } from "@/components/StatusBadge";
+import { EnrichmentPanel } from "@/components/EnrichmentPanel";
+import { getLatestRunsForEntity } from "@/lib/enrichment-runs";
 
 function formatDate(value: Date | null) {
   return value ? new Date(value).toLocaleDateString("fr-FR") : "—";
@@ -23,6 +25,7 @@ export default async function ContactModal({
   if (!detail) notFound();
 
   const { contact, company, deals } = detail;
+  const enrichmentRuns = await getLatestRunsForEntity("contact", contact.id);
 
   return (
     <Drawer
@@ -33,7 +36,29 @@ export default async function ContactModal({
         <DrawerRow label="Email" value={contact.email} />
         <DrawerRow label="Téléphone" value={contact.phone} />
         <DrawerRow label="Rôle" value={contact.role} />
+        <DrawerRow
+          label="LinkedIn"
+          value={
+            contact.linkedinUrl ? (
+              <a href={contact.linkedinUrl} target="_blank" rel="noreferrer" className="text-sonate-orange hover:underline">
+                Profil
+              </a>
+            ) : null
+          }
+        />
         <DrawerRow label="Créé le" value={formatDate(contact.createdAt)} />
+      </DrawerSection>
+
+      <DrawerSection title="Enrichissement (Derrick App)">
+        <EnrichmentPanel
+          entityType="contact"
+          entityId={contact.id}
+          runs={enrichmentRuns}
+          disabledReasons={{
+            ...(contact.linkedinUrl ? {} : { phone: "Trouve d'abord le profil LinkedIn du contact." }),
+            ...(contact.email ? {} : { verify_email: "Ce contact n'a pas d'email." }),
+          }}
+        />
       </DrawerSection>
 
       <DrawerSection title="Entreprise">

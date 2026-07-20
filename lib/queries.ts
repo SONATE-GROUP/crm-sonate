@@ -239,6 +239,7 @@ async function _listCompanies(filters: CompanyListFilters) {
   return { rows, total: count, page, pageCount: Math.max(1, Math.ceil(count / PAGE_SIZE)) };
 }
 export const listCompanies = unstable_cache(_listCompanies, ["list-companies"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });
+export type CompanyRow = Awaited<ReturnType<typeof _listCompanies>>["rows"][number];
 
 export type PendingLead = {
   id: number;
@@ -339,6 +340,7 @@ async function _listContacts(filters: ContactListFilters) {
   return { rows, total: count, page, pageCount: Math.max(1, Math.ceil(count / PAGE_SIZE)) };
 }
 export const listContacts = unstable_cache(_listContacts, ["list-contacts"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });
+export type ContactRow = Awaited<ReturnType<typeof _listContacts>>["rows"][number];
 
 async function _getContactDetail(id: number) {
   const [contact] = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);

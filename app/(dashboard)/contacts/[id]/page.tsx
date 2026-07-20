@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { getContactDetail } from "@/lib/queries";
 import { Field, Section } from "@/components/DetailSection";
 import { StatusBadge } from "@/components/StatusBadge";
+import { EnrichmentPanel } from "@/components/EnrichmentPanel";
+import { getLatestRunsForEntity } from "@/lib/enrichment-runs";
 
 function formatDate(value: Date | null) {
   return value ? new Date(value).toLocaleDateString("fr-FR") : "—";
@@ -22,6 +24,7 @@ export default async function ContactDetailPage({
   if (!detail) notFound();
 
   const { contact, company, deals } = detail;
+  const enrichmentRuns = await getLatestRunsForEntity("contact", contact.id);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -37,8 +40,30 @@ export default async function ContactDetailPage({
           <Field label="Email" value={contact.email} />
           <Field label="Téléphone" value={contact.phone} />
           <Field label="Rôle" value={contact.role} />
+          <Field
+            label="LinkedIn"
+            value={
+              contact.linkedinUrl ? (
+                <a href={contact.linkedinUrl} target="_blank" rel="noreferrer" className="text-sonate-orange hover:underline">
+                  {contact.linkedinUrl}
+                </a>
+              ) : null
+            }
+          />
           <Field label="Créé le" value={formatDate(contact.createdAt)} />
         </dl>
+      </Section>
+
+      <Section title="Enrichissement (Derrick App)">
+        <EnrichmentPanel
+          entityType="contact"
+          entityId={contact.id}
+          runs={enrichmentRuns}
+          disabledReasons={{
+            ...(contact.linkedinUrl ? {} : { phone: "Trouve d'abord le profil LinkedIn du contact." }),
+            ...(contact.email ? {} : { verify_email: "Ce contact n'a pas d'email." }),
+          }}
+        />
       </Section>
 
       <Section title="Entreprise">

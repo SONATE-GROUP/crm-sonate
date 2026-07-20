@@ -136,7 +136,6 @@ export async function ingestLead(payload: LeadPayload): Promise<IngestResult> {
       b2bB2c: payload.company.b2bB2c ?? null,
       linkedinUrl: cleanText(payload.company.linkedinUrl),
       sourceSystem: payload.company.sourceSystem ?? "api",
-      enrichmentStatus: "pending",
     })
     .returning({ id: companies.id });
 

@@ -9,8 +9,63 @@ export type B2bB2c = (typeof B2B_B2C_VALUES)[number];
 export const SOURCE_SYSTEM_VALUES = ["deuxio", "wedig", "letsclic", "api"] as const;
 export type SourceSystem = (typeof SOURCE_SYSTEM_VALUES)[number];
 
-export const ENRICHMENT_STATUS_VALUES = ["pending", "done", "failed"] as const;
-export type EnrichmentStatus = (typeof ENRICHMENT_STATUS_VALUES)[number];
+export const ENRICHMENT_ENTITY_TYPE_VALUES = ["company", "contact"] as const;
+export type EnrichmentEntityType = (typeof ENRICHMENT_ENTITY_TYPE_VALUES)[number];
+
+export const ENRICHMENT_TYPE_VALUES = [
+  "website_contact_social",
+  "linkedin_company",
+  "linkedin_profile",
+  "email",
+  "phone",
+  "verify_email",
+] as const;
+export type EnrichmentType = (typeof ENRICHMENT_TYPE_VALUES)[number];
+
+export const ENRICHMENT_RUN_STATUS_VALUES = ["done", "failed"] as const;
+export type EnrichmentRunStatus = (typeof ENRICHMENT_RUN_STATUS_VALUES)[number];
+
+export const ENRICHMENT_TYPE_INFO: Record<
+  EnrichmentType,
+  { label: string; entityType: EnrichmentEntityType; maxCredits: number; description: string }
+> = {
+  website_contact_social: {
+    label: "Contact & réseaux sociaux (site web)",
+    entityType: "company",
+    maxCredits: 2,
+    description: "Cherche un email, un téléphone et des liens réseaux sociaux à partir du site web de l'entreprise.",
+  },
+  linkedin_company: {
+    label: "Données LinkedIn entreprise",
+    entityType: "company",
+    maxCredits: 2,
+    description: "Retrouve la page LinkedIn de l'entreprise (si inconnue) puis l'enrichit (secteur, effectif, followers, description).",
+  },
+  linkedin_profile: {
+    label: "Profil LinkedIn",
+    entityType: "contact",
+    maxCredits: 2,
+    description: "Retrouve le profil LinkedIn du contact (si inconnu) puis l'enrichit (poste, entreprise, formation).",
+  },
+  email: {
+    label: "Email professionnel",
+    entityType: "contact",
+    maxCredits: 5,
+    description: "Cherche l'email professionnel à partir du nom complet et de l'entreprise du contact.",
+  },
+  phone: {
+    label: "Téléphone mobile",
+    entityType: "contact",
+    maxCredits: 150,
+    description: "Cherche le téléphone mobile à partir du profil LinkedIn du contact (nécessite le profil LinkedIn déjà trouvé).",
+  },
+  verify_email: {
+    label: "Vérification email",
+    entityType: "contact",
+    maxCredits: 1,
+    description: "Vérifie la validité de l'email déjà connu du contact.",
+  },
+};
 
 export const PENDING_LEAD_STATUS_VALUES = ["pending", "merged", "dismissed"] as const;
 export type PendingLeadStatus = (typeof PENDING_LEAD_STATUS_VALUES)[number];
@@ -54,11 +109,6 @@ export const companies = sqliteTable("companies", {
   b2bB2c: text("b2b_b2c", { enum: B2B_B2C_VALUES }),
   linkedinUrl: text("linkedin_url"),
   sourceSystem: text("source_system", { enum: SOURCE_SYSTEM_VALUES }).notNull(),
-  // Renseigné pour les entreprises créées via l'API live, en attendant l'appel
-  // réel à Derrick App (cf. lib/enrichment.ts) : NULL pour les entreprises
-  // importées en batch, jamais enrichies automatiquement.
-  enrichmentStatus: text("enrichment_status", { enum: ENRICHMENT_STATUS_VALUES }),
-  enrichmentData: text("enrichment_data"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),
@@ -73,6 +123,7 @@ export const contacts = sqliteTable("contacts", {
   email: text("email"),
   phone: text("phone"),
   role: text("role"),
+  linkedinUrl: text("linkedin_url"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),
@@ -164,3 +215,24 @@ export const integrationSettings = sqliteTable(
   },
   (table) => [unique().on(table.ownerEmail, table.provider)]
 );
+
+/**
+ * Historique des tentatives d'enrichissement Derrick App, à l'unité ou en
+ * masse, déclenchées manuellement depuis les fiches entreprise/contact ou
+ * les listes (cf. lib/manual-enrichment.ts). Append-only : la ligne la plus
+ * récente par (entityType, entityId, enrichmentType) est la valeur actuelle,
+ * les précédentes restent comme historique.
+ */
+export const enrichmentRuns = sqliteTable("enrichment_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  entityType: text("entity_type", { enum: ENRICHMENT_ENTITY_TYPE_VALUES }).notNull(),
+  entityId: integer("entity_id").notNull(),
+  enrichmentType: text("enrichment_type", { enum: ENRICHMENT_TYPE_VALUES }).notNull(),
+  status: text("status", { enum: ENRICHMENT_RUN_STATUS_VALUES }).notNull(),
+  resultData: text("result_data"),
+  errorMessage: text("error_message"),
+  creditsUsed: integer("credits_used"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
