@@ -253,10 +253,9 @@ largement suffisante (les données ne changent que via une ré-exécution de
 de la base Turso correspond à la région d'exécution des fonctions Netlify —
 un aller-retour transatlantique par requête est le suspect n°1.
 
-## Auth basique
+## Auth — page de connexion
 
-Quelques comptes définis via la variable d'environnement `AUTH_USERS`
-(HTTP Basic Auth, vérifiée dans `proxy.ts` sur toutes les routes) :
+Quelques comptes définis via la variable d'environnement `AUTH_USERS` :
 
 ```
 AUTH_USERS=alice:$2b$10$hash...,bob:$2b$10$hash...
@@ -268,6 +267,16 @@ Générer un hash :
 npx tsx scripts/hash-password.ts "mot-de-passe"
 ```
 
+La connexion se fait via une vraie page (`/login`, formulaire identifiant +
+mot de passe) plutôt qu'une popup HTTP Basic Auth du navigateur. `proxy.ts`
+redirige vers `/login?next=<page demandée>` toute requête sans cookie de
+session valide ; le Server Action `login` (`lib/auth-actions.ts`) vérifie le
+mot de passe contre `AUTH_USERS` puis pose un cookie de session signé (HMAC,
+30 jours, `httpOnly`) — signé avec `AUTH_USERS` lui-même comme clé, donc pas
+de variable d'environnement supplémentaire à gérer, et changer `AUTH_USERS`
+invalide au passage toutes les sessions en cours. Un bouton "Déconnexion" en
+bas de la sidebar (`lib/auth-actions.ts:logout`) supprime le cookie.
+
 ⚠️ **Dans un fichier `.env*` local**, Next.js interprète `$xxx` comme une
 interpolation de variable et casse les hash bcrypt. Échapper chaque `$` en
 `\$` dans `.env.local` :
@@ -276,7 +285,7 @@ interpolation de variable et casse les hash bcrypt. Échapper chaque `$` en
 AUTH_USERS=alice:\$2b\$10\$hash...
 ```
 
-Sur Vercel, les variables d'environnement sont injectées directement (pas de
+Sur Netlify, les variables d'environnement sont injectées directement (pas de
 parsing `.env`) : coller le hash **sans** échappement dans le dashboard.
 
 ## Développement local
