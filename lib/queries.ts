@@ -6,6 +6,7 @@ import {
   apiKeys,
   companies,
   contacts,
+  conversationMessages,
   deals,
   integrationSettings,
   pendingLeads,
@@ -357,6 +358,19 @@ export const getContactDetail = unstable_cache(_getContactDetail, ["get-contact-
   revalidate: REVALIDATE_SECONDS,
   tags: CACHE_TAGS,
 });
+
+async function _getConversationsForContact(contactId: number) {
+  return db
+    .select()
+    .from(conversationMessages)
+    .where(eq(conversationMessages.contactId, contactId))
+    .orderBy(asc(conversationMessages.sentAt));
+}
+export const getConversationsForContact = unstable_cache(_getConversationsForContact, ["get-contact-conversations"], {
+  revalidate: REVALIDATE_SECONDS,
+  tags: CACHE_TAGS,
+});
+export type ConversationMessage = Awaited<ReturnType<typeof _getConversationsForContact>>[number];
 
 async function _getDealDetail(id: number) {
   const [deal] = await db.select().from(deals).where(eq(deals.id, id)).limit(1);

@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getContactDetail } from "@/lib/queries";
+import { getContactDetail, getConversationsForContact } from "@/lib/queries";
 import { Field, Section } from "@/components/DetailSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EnrichmentPanel } from "@/components/EnrichmentPanel";
+import { ConversationThread } from "@/components/ConversationThread";
 import { getLatestRunsForEntity } from "@/lib/enrichment-runs";
 
 function formatDate(value: Date | null) {
@@ -24,7 +25,10 @@ export default async function ContactDetailPage({
   if (!detail) notFound();
 
   const { contact, company, deals } = detail;
-  const enrichmentRuns = await getLatestRunsForEntity("contact", contact.id);
+  const [enrichmentRuns, conversations] = await Promise.all([
+    getLatestRunsForEntity("contact", contact.id),
+    getConversationsForContact(contact.id),
+  ]);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -52,6 +56,10 @@ export default async function ContactDetailPage({
           />
           <Field label="Créé le" value={formatDate(contact.createdAt)} />
         </dl>
+      </Section>
+
+      <Section title={`Conversations (${conversations.length})`}>
+        <ConversationThread messages={conversations} />
       </Section>
 
       <Section title="Enrichissement (Derrick App)">
