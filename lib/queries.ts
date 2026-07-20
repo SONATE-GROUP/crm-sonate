@@ -474,3 +474,19 @@ export async function getIntegrationSettingForOwner(ownerEmail: string, provider
     .where(and(eq(integrationSettings.ownerEmail, ownerEmail), eq(integrationSettings.provider, provider)));
   return row ?? null;
 }
+
+/**
+ * Une intégration n'a pas de "propriétaire" naturel côté enrichissement en
+ * tâche de fond (déclenché par un webhook, pas par un utilisateur connecté) :
+ * on utilise la clé la plus récemment configurée pour ce provider, peu
+ * importe qui l'a saisie.
+ */
+export async function getAnyIntegrationSetting(provider: IntegrationProvider): Promise<string | null> {
+  const [row] = await db
+    .select({ value: integrationSettings.value })
+    .from(integrationSettings)
+    .where(eq(integrationSettings.provider, provider))
+    .orderBy(desc(integrationSettings.updatedAt))
+    .limit(1);
+  return row?.value ?? null;
+}

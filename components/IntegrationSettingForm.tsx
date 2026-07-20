@@ -47,7 +47,7 @@ export function IntegrationSettingForm({
           type="password"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder={isConfigured ? "Configurée — laisser vide pour ne pas changer" : "Coller la clé ici"}
+          placeholder={isConfigured ? "Configurée, laisser vide pour ne pas changer" : "Coller la clé ici"}
           className={fieldClass}
         />
         {isConfigured && (

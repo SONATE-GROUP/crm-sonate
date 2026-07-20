@@ -26,7 +26,7 @@ export default async function SettingsPage() {
       <PageHeader title="Paramètres" />
       <p className="mb-8 text-sm text-sonate-muted">
         Connecté en tant que <span className="font-semibold text-sonate-green">{email}</span>. Ces réglages sont
-        propres à ton compte — chacun configure ses propres clés, rien n&apos;est partagé via les variables
+        propres à ton compte : chacun configure ses propres clés, rien n&apos;est partagé via les variables
         d&apos;environnement Netlify.
       </p>
 
@@ -45,8 +45,8 @@ export default async function SettingsPage() {
       <section>
         <h2 className="mb-1 text-lg font-bold text-sonate-green">Intégrations</h2>
         <p className="mb-4 text-sm text-sonate-muted">
-          Derrick App (enrichissement automatique des nouvelles entreprises) — l&apos;appel réel à l&apos;API n&apos;est
-          pas encore branché côté serveur, mais tu peux déjà enregistrer ta clé pour quand ce sera fait.
+          Derrick App (enrichissement automatique des nouvelles entreprises créées via le webhook). Renseigne ici la
+          clé API récupérée dans l&apos;add-on Google Sheets Derrick (menu burger → API).
         </p>
         <IntegrationSettingForm
           provider="derrick_app"

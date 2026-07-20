@@ -54,7 +54,7 @@ export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyRow[] }) {
       {newPlaintext && (
         <div className="mb-4 rounded-xl border border-sonate-orange/30 bg-sonate-orange/5 p-4">
           <p className="mb-2 text-sm font-semibold text-sonate-orange">
-            Clé créée — copie-la maintenant, elle ne sera plus jamais affichée en entier :
+            Clé créée : copie-la maintenant, elle ne sera plus jamais affichée en entier.
           </p>
           <code className="block break-all rounded-lg bg-white px-3 py-2 text-sm font-mono text-sonate-green">
             {newPlaintext}

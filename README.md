@@ -228,14 +228,35 @@ grossit significativement.
 
 Chaque entreprise créée directement (sans correspondance) passe en
 `enrichmentStatus: "pending"` et l'enrichissement est déclenché en tâche de
-fond via `after()` (`next/server`) — la requête webhook répond immédiatement
-(`201`) sans attendre l'appel à l'API Derrick App. `lib/enrichment.ts`
-contient le point d'intégration ; **l'appel réel à l'API Derrick App n'est pas
-encore branché** (stub qui laisse `enrichmentStatus` à `"pending"`) — en
-attente de la documentation de l'API. La clé Derrick App se configure elle
-aussi depuis `/settings` (table `integration_settings`, stockée en clair —
-c'est nous qui devons la renvoyer à Derrick App, donc pas de hash possible
-ici, contrairement aux clés d'ingestion).
+fond via `after()` (`next/server`) : la requête webhook répond immédiatement
+(`201`) sans attendre les appels à l'API Derrick App. `lib/derrick.ts` est le
+client HTTP (voir la doc officielle pour le contrat complet : base URL
+`https://app1.derrick-app.com/api/v1/`, header `x-api-key`, corps
+`{ "data": {...} }`, 60 req/min). `lib/enrichment.ts` orchestre trois appels,
+chacun tenté indépendamment (l'échec de l'un n'empêche pas les autres) :
+
+1. Site web connu -> `website_contact_social` (email, téléphone, réseaux
+   sociaux).
+2. Pas d'URL LinkedIn connue -> `search_companies` (retrouve l'URL LinkedIn
+   à partir du nom).
+3. URL LinkedIn disponible (déjà connue ou trouvée à l'étape 2) ->
+   `enrich_companies` (données d'entreprise LinkedIn : secteur, effectif,
+   followers, description, etc.).
+
+Le résultat brut (et les erreurs éventuelles par appel) est stocké dans
+`companies.enrichmentData` (JSON), `enrichmentStatus` passe à `"done"` si au
+moins un appel a renvoyé des données, `"failed"` sinon. Un résumé lisible est
+affiché sur la fiche entreprise (page complète et volet) via
+`lib/enrichment-display.ts`.
+
+La clé Derrick App se configure depuis `/settings` (table
+`integration_settings`, stockée en clair : c'est nous qui devons la renvoyer
+à Derrick App, donc pas de hash possible ici, contrairement aux clés
+d'ingestion). L'enrichissement en tâche de fond n'a pas d'utilisateur
+connecté associé : `getAnyIntegrationSetting()` prend la clé la plus
+récemment configurée, peu importe qui l'a saisie. Si aucune clé n'est
+configurée, l'entreprise reste en `"pending"` indéfiniment (message dans les
+logs serveur).
 
 ⚠️ `after()` doit continuer à s'exécuter après l'envoi de la réponse HTTP
 même sur Netlify (Next Runtime) — à vérifier en conditions réelles après

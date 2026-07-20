@@ -6,7 +6,14 @@ import { Drawer } from "@/components/Drawer";
 import { DrawerSection, DrawerRow } from "@/components/DrawerSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import { mergePendingLead, dismissPendingLead } from "@/lib/actions";
-import { DEAL_STATUS_LABELS } from "@/db/schema";
+import { DEAL_STATUS_LABELS, type EnrichmentStatus } from "@/db/schema";
+import { parseEnrichmentSummary } from "@/lib/enrichment-display";
+
+const ENRICHMENT_STATUS_LABELS: Record<EnrichmentStatus, string> = {
+  pending: "En attente",
+  done: "Terminé",
+  failed: "Échoué",
+};
 
 function formatDate(value: Date | null) {
   return value ? new Date(value).toLocaleDateString("fr-FR") : "—";
@@ -29,6 +36,7 @@ export default async function CompanyModal({
   if (!detail) notFound();
 
   const { company, contacts, deals, pendingLeads } = detail;
+  const enrichment = parseEnrichmentSummary(company.enrichmentData);
 
   return (
     <Drawer title={company.name} subtitle={company.sector ?? undefined}>
@@ -104,6 +112,27 @@ export default async function CompanyModal({
         <DrawerRow label="Source système" value={company.sourceSystem} />
         <DrawerRow label="Créée le" value={formatDate(company.createdAt)} />
       </DrawerSection>
+
+      {company.enrichmentStatus && (
+        <DrawerSection title="Enrichissement (Derrick App)">
+          <DrawerRow label="Statut" value={ENRICHMENT_STATUS_LABELS[company.enrichmentStatus]} />
+          {enrichment?.email && <DrawerRow label="Email trouvé" value={enrichment.email} />}
+          {enrichment?.phone && <DrawerRow label="Téléphone trouvé" value={enrichment.phone} />}
+          {enrichment?.linkedinUrl && (
+            <DrawerRow
+              label="LinkedIn"
+              value={
+                <a href={enrichment.linkedinUrl} target="_blank" rel="noreferrer" className="text-sonate-orange hover:underline">
+                  Profil
+                </a>
+              }
+            />
+          )}
+          {enrichment?.industry && <DrawerRow label="Secteur (LinkedIn)" value={enrichment.industry} />}
+          {enrichment?.staffCountRange && <DrawerRow label="Effectif" value={enrichment.staffCountRange} />}
+          {enrichment?.followers !== undefined && <DrawerRow label="Followers" value={enrichment.followers} />}
+        </DrawerSection>
+      )}
 
       <DrawerSection title={`Contact${contacts.length > 1 ? "s" : ""} (${contacts.length})`}>
         {contacts.map((c) => (
