@@ -101,13 +101,16 @@ Sidebar de navigation (3 onglets) façon dashboard interne Sonate, cartes de
 stats en haut de chaque liste, badges de statut colorés :
 
 - `/companies` + `/companies/[id]` : liste des entreprises (recherche nom/site/secteur,
-  filtres B2B/B2C et source système) et fiche détail (infos entreprise, tous
-  ses contacts, tous ses deals).
+  filtres B2B/B2C et source système). Cliquer sur une entreprise ouvre un
+  **volet latéral** (infos entreprise, alerte de fusion le cas échéant,
+  contacts, deals) par-dessus la liste, même mécanisme que les contacts
+  ci-dessous.
 - `/contacts` + `/contacts/[id]` : liste des contacts (recherche nom/email/
   téléphone/entreprise). Cliquer sur un contact ouvre un **volet latéral**
   (infos contact, entreprise associée, deals) par-dessus la liste, sans
   changer de page — implémenté avec les Intercepting + Parallel Routes de
-  Next.js (`app/contacts/@modal/(.)[id]`) : l'URL `/contacts/[id]` reste
+  Next.js (`app/(dashboard)/contacts/@modal/(.)[id]`, même chose pour
+  `companies`) : l'URL `/companies/[id]` ou `/contacts/[id]` reste
   partageable/rechargeable et affiche alors la fiche en page complète.
 - `/deals` + `/deals/[id]` : liste des deals (recherche + filtres statut,
   B2B/B2C, owner, score minimum, pagination) et fiche détail (deal, entreprise,
