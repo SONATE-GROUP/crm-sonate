@@ -7,6 +7,7 @@ import {
   contacts,
   deals,
   pendingLeads,
+  DEAL_STATUS_VALUES,
   SOURCE_SYSTEM_VALUES,
   type B2bB2c,
   type DealStatus,
@@ -58,6 +59,11 @@ function assertValidPayload(payload: LeadPayload) {
   if (payload.company.sourceSystem && !SOURCE_SYSTEM_VALUES.includes(payload.company.sourceSystem)) {
     throw new InvalidLeadPayloadError(
       `company.sourceSystem invalide: "${payload.company.sourceSystem}". Valeurs acceptées: ${SOURCE_SYSTEM_VALUES.join(", ")}`
+    );
+  }
+  if (payload.deal?.status && !DEAL_STATUS_VALUES.includes(payload.deal.status)) {
+    throw new InvalidLeadPayloadError(
+      `deal.status invalide: "${payload.deal.status}". Valeurs acceptées: ${DEAL_STATUS_VALUES.join(", ")}`
     );
   }
 }

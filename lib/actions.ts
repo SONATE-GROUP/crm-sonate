@@ -4,9 +4,18 @@ import { eq } from "drizzle-orm";
 import { updateTag } from "next/cache";
 
 import { db } from "@/db/client";
-import { contacts, deals, pendingLeads } from "@/db/schema";
+import { contacts, deals, pendingLeads, DEAL_STATUS_VALUES, type DealStatus } from "@/db/schema";
 import type { LeadPayload } from "@/lib/ingest";
 import { cleanText, normalizeEmail } from "@/lib/normalize";
+
+/** Changement de statut depuis le board kanban (drag-and-drop). */
+export async function updateDealStatus(dealId: number, status: DealStatus) {
+  if (!DEAL_STATUS_VALUES.includes(status)) {
+    throw new Error(`Statut de deal invalide: "${status}"`);
+  }
+  await db.update(deals).set({ status, updatedAt: new Date() }).where(eq(deals.id, dealId));
+  updateTag("crm-data");
+}
 
 /**
  * Accepte une proposition de fusion : les données du lead en attente

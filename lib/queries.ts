@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import { and, asc, desc, eq, gte, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, like, lte, or, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { companies, contacts, deals, pendingLeads, type DealStatus, type B2bB2c, type SourceSystem } from "@/db/schema";
@@ -20,8 +20,13 @@ export type DealListFilters = {
   b2bB2c?: B2bB2c;
   owner?: string;
   scoreMin?: number;
+  /** Format "YYYY-MM-DD", borne incluse sur deals.createdAt. */
+  dateFrom?: string;
+  dateTo?: string;
   page?: number;
 };
+
+export type DealKanbanFilters = Omit<DealListFilters, "status" | "page">;
 
 /** CTE: un contact "représentatif" (le premier créé) par entreprise. */
 function contactPerCompanyCte() {
@@ -53,6 +58,8 @@ function buildDealsWhere(filters: DealListFilters) {
   if (filters.b2bB2c) conditions.push(eq(companies.b2bB2c, filters.b2bB2c));
   if (filters.owner) conditions.push(eq(deals.owner, filters.owner));
   if (filters.scoreMin !== undefined) conditions.push(gte(deals.score, filters.scoreMin));
+  if (filters.dateFrom) conditions.push(gte(deals.createdAt, new Date(`${filters.dateFrom}T00:00:00`)));
+  if (filters.dateTo) conditions.push(lte(deals.createdAt, new Date(`${filters.dateTo}T23:59:59`)));
 
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
@@ -99,6 +106,44 @@ async function _listDeals(filters: DealListFilters) {
   return { rows, total: count, page, pageCount: Math.max(1, Math.ceil(count / PAGE_SIZE)) };
 }
 export const listDeals = unstable_cache(_listDeals, ["list-deals"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });
+
+/**
+ * Toutes les deals correspondant aux filtres, tous statuts confondus et sans
+ * pagination — pour le board kanban qui les répartit lui-même par colonne
+ * (statut). Acceptable tant que le volume reste de l'ordre du millier de
+ * deals ; à revoir (chargement par colonne) si ça grossit significativement.
+ */
+async function _listDealsForKanban(filters: DealKanbanFilters) {
+  const cpc = contactPerCompanyCte();
+  const where = buildDealsWhere(filters);
+
+  return db
+    .with(cpc)
+    .select({
+      id: deals.id,
+      status: deals.status,
+      score: deals.score,
+      owner: deals.owner,
+      montantDevis: deals.montantDevis,
+      createdAt: deals.createdAt,
+      companyId: companies.id,
+      companyName: companies.name,
+      b2bB2c: companies.b2bB2c,
+      contactFullName: contacts.fullName,
+      contactEmail: contacts.email,
+    })
+    .from(deals)
+    .innerJoin(companies, eq(deals.companyId, companies.id))
+    .leftJoin(cpc, eq(cpc.companyId, companies.id))
+    .leftJoin(contacts, eq(contacts.id, cpc.contactId))
+    .where(where)
+    .orderBy(desc(deals.createdAt));
+}
+export const listDealsForKanban = unstable_cache(_listDealsForKanban, ["list-deals-kanban"], {
+  revalidate: REVALIDATE_SECONDS,
+  tags: CACHE_TAGS,
+});
+export type KanbanDeal = Awaited<ReturnType<typeof _listDealsForKanban>>[number];
 
 async function _listOwners() {
   const rows = await db

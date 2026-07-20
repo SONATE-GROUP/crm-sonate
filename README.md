@@ -4,7 +4,7 @@ CRM interne : Next.js (App Router) + Drizzle ORM + Turso (libSQL).
 
 **Étape 1 (ce dépôt)** : schéma, import des données Notion, application en
 lecture seule (liste + recherche + filtres + fiche détail), auth basique.
-Le kanban, l'historique, les tâches et le reporting arrivent à l'étape 2.
+L'historique, les tâches et le reporting arrivent à l'étape 2.
 
 ## Schéma
 
@@ -112,9 +112,21 @@ stats en haut de chaque liste, badges de statut colorés :
   Next.js (`app/(dashboard)/contacts/@modal/(.)[id]`, même chose pour
   `companies`) : l'URL `/companies/[id]` ou `/contacts/[id]` reste
   partageable/rechargeable et affiche alors la fiche en page complète.
-- `/deals` + `/deals/[id]` : liste des deals (recherche + filtres statut,
-  B2B/B2C, owner, score minimum, pagination) et fiche détail (deal, entreprise,
-  contacts, autres deals de la même entreprise).
+- `/deals` : board **kanban** (une colonne par statut, 12 colonnes). Glisser-
+  déposer une carte dans une autre colonne change le statut du deal
+  **immédiatement** (Server Action `updateDealStatus`, `lib/actions.ts`) —
+  mise à jour optimiste côté client, avec retour en arrière automatique et
+  message d'erreur si l'écriture échoue. Filtres : recherche, B2B/B2C,
+  responsable, score minimum, plage de dates de création. Les deals sans
+  statut reconnu (`null` ou valeur hors de l'enum — ne devrait arriver qu'en
+  cas de donnée corrompue) sont exclus du board avec un décompte visible
+  plutôt que silencieusement absents.
+- `/deals/liste` : la vue liste équivalente (recherche + filtres statut,
+  B2B/B2C, owner, score minimum, plage de dates, pagination). Un bouton
+  Kanban/Liste (`components/ViewToggle.tsx`) permet de basculer entre les
+  deux vues.
+- `/deals/[id]` : fiche détail d'un deal (deal, entreprise, contacts, autres
+  deals de la même entreprise), commune aux deux vues.
 
 ## Base vivante — ingestion live des leads (`POST /api/leads`)
 
