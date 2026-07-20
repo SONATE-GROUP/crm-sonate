@@ -11,7 +11,7 @@ export default function DashboardLayout({
 }>) {
   return (
     <div className="flex min-h-full">
-      <aside className="flex w-64 shrink-0 flex-col bg-sonate-green text-sonate-cream">
+      <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col overflow-y-auto bg-sonate-green text-sonate-cream">
         <Link href="/companies" className="flex flex-col px-6 py-6 leading-none">
           <span className="text-2xl font-extrabold tracking-tight">Sonate</span>
           <span className="mt-0.5 text-[11px] font-medium text-sonate-cream/60">CRM interne</span>
