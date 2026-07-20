@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, real, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 
 export const B2B_B2C_VALUES = ["b2b", "b2c", "mixte"] as const;
 export type B2bB2c = (typeof B2B_B2C_VALUES)[number];
@@ -122,3 +122,45 @@ export const pendingLeads = sqliteTable("pending_leads", {
     .default(sql`(unixepoch())`),
   resolvedAt: integer("resolved_at", { mode: "timestamp" }),
 });
+
+/**
+ * Clés API pour l'ingestion live (POST /api/leads), configurables par chaque
+ * utilisateur depuis /settings plutôt que via une variable d'environnement
+ * Netlify partagée. Seul le hash (SHA-256) est stocké — le hachage est
+ * volontairement non salé/non-bcrypt : la clé en clair est un secret
+ * aléatoire de haute entropie généré par nous (pas un mot de passe choisi
+ * par un humain), donc un lookup direct par hash est sûr et permet une
+ * vérification en O(1) au lieu de comparer contre chaque hash bcrypt stocké.
+ * `keyPreview` (4 derniers caractères) permet à l'utilisateur de reconnaître
+ * sa clé dans la liste sans jamais réafficher la valeur complète après sa
+ * création.
+ */
+export const apiKeys = sqliteTable("api_keys", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ownerEmail: text("owner_email").notNull(),
+  label: text("label").notNull(),
+  keyHash: text("key_hash").notNull().unique(),
+  keyPreview: text("key_preview").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+});
+
+export const INTEGRATION_PROVIDER_VALUES = ["derrick_app"] as const;
+export type IntegrationProvider = (typeof INTEGRATION_PROVIDER_VALUES)[number];
+
+/** Identifiants d'intégrations tierces (ex. Derrick App), par utilisateur. */
+export const integrationSettings = sqliteTable(
+  "integration_settings",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ownerEmail: text("owner_email").notNull(),
+    provider: text("provider", { enum: INTEGRATION_PROVIDER_VALUES }).notNull(),
+    value: text("value").notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [unique().on(table.ownerEmail, table.provider)]
+);

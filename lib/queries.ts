@@ -2,7 +2,18 @@ import { unstable_cache } from "next/cache";
 import { and, asc, desc, eq, gte, like, lte, or, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { companies, contacts, deals, pendingLeads, type DealStatus, type B2bB2c, type SourceSystem } from "@/db/schema";
+import {
+  apiKeys,
+  companies,
+  contacts,
+  deals,
+  integrationSettings,
+  pendingLeads,
+  type DealStatus,
+  type B2bB2c,
+  type IntegrationProvider,
+  type SourceSystem,
+} from "@/db/schema";
 
 export const PAGE_SIZE = 50;
 
@@ -437,3 +448,29 @@ async function _getContactStats(): Promise<ContactStats> {
   };
 }
 export const getContactStats = unstable_cache(_getContactStats, ["contact-stats"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });
+
+// Pas de unstable_cache sur les requêtes de /settings : page peu visitée,
+// par utilisateur, et on préfère la fraîcheur immédiate après création/
+// révocation d'une clé à un léger gain de perf sur une page à faible trafic.
+
+export async function listApiKeysForOwner(ownerEmail: string) {
+  return db
+    .select({
+      id: apiKeys.id,
+      label: apiKeys.label,
+      keyPreview: apiKeys.keyPreview,
+      createdAt: apiKeys.createdAt,
+      lastUsedAt: apiKeys.lastUsedAt,
+    })
+    .from(apiKeys)
+    .where(eq(apiKeys.ownerEmail, ownerEmail))
+    .orderBy(desc(apiKeys.createdAt));
+}
+
+export async function getIntegrationSettingForOwner(ownerEmail: string, provider: IntegrationProvider) {
+  const [row] = await db
+    .select({ value: integrationSettings.value, updatedAt: integrationSettings.updatedAt })
+    .from(integrationSettings)
+    .where(and(eq(integrationSettings.ownerEmail, ownerEmail), eq(integrationSettings.provider, provider)));
+  return row ?? null;
+}

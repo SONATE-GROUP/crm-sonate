@@ -1,7 +1,11 @@
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 import type { NextRequest } from "next/server";
 
+import { db } from "@/db/client";
+import { apiKeys } from "@/db/schema";
+import { hashApiKey } from "@/lib/apiKeys";
 import { ingestLead, InvalidLeadPayloadError, type LeadPayload } from "@/lib/ingest";
 import { triggerEnrichment } from "@/lib/enrichment";
 
@@ -12,20 +16,28 @@ import { triggerEnrichment } from "@/lib/enrichment";
  * lib/ingest.ts pour la logique, README.md pour le format de payload attendu.
  *
  * Authentification par clé API (indépendante de l'auth humaine de proxy.ts) :
- * header "x-api-key" ou "Authorization: Bearer <clé>".
+ * header "x-api-key" ou "Authorization: Bearer <clé>", vérifiée contre les
+ * clés générées par chaque utilisateur depuis /settings (table api_keys) —
+ * n'importe quelle clé valide de n'importe quel utilisateur autorise l'appel.
  */
 export async function POST(request: NextRequest) {
   const providedKey =
     request.headers.get("x-api-key") ?? request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  const expectedKey = process.env.LEADS_API_KEY;
 
-  if (!expectedKey) {
-    console.error("LEADS_API_KEY n'est pas configurée côté serveur.");
-    return NextResponse.json({ error: "server_misconfigured" }, { status: 500 });
-  }
-  if (!providedKey || providedKey !== expectedKey) {
+  if (!providedKey) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  const [matchedKey] = await db
+    .select({ id: apiKeys.id })
+    .from(apiKeys)
+    .where(eq(apiKeys.keyHash, hashApiKey(providedKey)))
+    .limit(1);
+
+  if (!matchedKey) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, matchedKey.id));
 
   let payload: LeadPayload;
   try {

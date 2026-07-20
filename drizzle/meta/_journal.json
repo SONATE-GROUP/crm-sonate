@@ -15,6 +15,13 @@
       "when": 1784304144993,
       "tag": "0001_previous_crusher_hogan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784537834511,
+      "tag": "0002_numerous_reaper",
+      "breakpoints": true
     }
   ]
 }

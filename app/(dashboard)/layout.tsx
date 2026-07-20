@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 
 import { NavLinks } from "@/components/NavLinks";
 import { logout } from "@/lib/auth-actions";
@@ -20,15 +20,24 @@ export default function DashboardLayout({
           Pipeline
         </div>
         <NavLinks />
-        <form action={logout} className="mt-auto px-3 pb-6">
-          <button
-            type="submit"
-            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-sonate-cream/70 hover:bg-sonate-cream/10 hover:text-sonate-cream"
+        <div className="mt-auto px-3 pb-6">
+          <Link
+            href="/settings"
+            className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-sonate-cream/70 hover:bg-sonate-cream/10 hover:text-sonate-cream"
           >
-            <LogOut size={17} strokeWidth={2} />
-            Déconnexion
-          </button>
-        </form>
+            <Settings size={17} strokeWidth={2} />
+            Paramètres
+          </Link>
+          <form action={logout}>
+            <button
+              type="submit"
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-sonate-cream/70 hover:bg-sonate-cream/10 hover:text-sonate-cream"
+            >
+              <LogOut size={17} strokeWidth={2} />
+              Déconnexion
+            </button>
+          </form>
+        </div>
       </aside>
       <div className="min-w-0 flex-1">
         <main>{children}</main>

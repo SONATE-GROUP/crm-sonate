@@ -97,8 +97,8 @@ statuts non reconnus, valeurs de "Source" non catégorisées.
 
 ## Application (lecture seule)
 
-Sidebar de navigation (3 onglets) façon dashboard interne Sonate, cartes de
-stats en haut de chaque liste, badges de statut colorés :
+Sidebar de navigation (3 onglets + Paramètres) façon dashboard interne
+Sonate, cartes de stats en haut de chaque liste, badges de statut colorés :
 
 - `/companies` + `/companies/[id]` : liste des entreprises (recherche nom/site/secteur,
   filtres B2B/B2C et source système). Cliquer sur une entreprise ouvre un
@@ -141,18 +141,19 @@ quelle que soit la source (formulaire, autre CRM, scraping, etc.).
 
 ### Authentification
 
-Header `x-api-key` (ou `Authorization: Bearer <clé>`), comparé à la variable
-d'environnement `LEADS_API_KEY` :
+Header `x-api-key` (ou `Authorization: Bearer <clé>`), comparé aux clés
+générées **depuis l'appli, page `/settings`** — pas de variable
+d'environnement partagée sur Netlify : chaque personne génère et gère ses
+propres clés (table `api_keys`, seul le hash SHA-256 est stocké ; la valeur
+en clair n'est affichée qu'une fois, à la création). N'importe quelle clé
+valide, peu importe qui l'a créée, autorise l'appel — il n'y a pas de notion
+d'attribution du lead créé à un utilisateur en particulier.
 
-```
-LEADS_API_KEY=une-longue-clé-secrète-générée-aléatoirement
-```
+- Header absent ou clé qui ne correspond à aucune clé active → `401`.
+- Aucune clé n'existe encore dans toute l'appli → tout appel échoue en `401`
+  jusqu'à ce qu'au moins une personne en crée une depuis `/settings`.
 
-- Header absent ou clé incorrecte → `401`.
-- `LEADS_API_KEY` non configurée côté serveur → `500` (l'endpoint refuse de
-  tourner sans clé plutôt que d'accepter n'importe quelle requête).
-
-Cette route n'est **pas** protégée par l'auth basique humaine (`proxy.ts`
+Cette route n'est **pas** protégée par l'auth de session humaine (`proxy.ts`
 exclut explicitement `/api/*`) : c'est un point d'entrée machine-à-machine
 avec son propre contrôle d'accès.
 
@@ -231,7 +232,10 @@ fond via `after()` (`next/server`) — la requête webhook répond immédiatemen
 (`201`) sans attendre l'appel à l'API Derrick App. `lib/enrichment.ts`
 contient le point d'intégration ; **l'appel réel à l'API Derrick App n'est pas
 encore branché** (stub qui laisse `enrichmentStatus` à `"pending"`) — en
-attente de la documentation de l'API.
+attente de la documentation de l'API. La clé Derrick App se configure elle
+aussi depuis `/settings` (table `integration_settings`, stockée en clair —
+c'est nous qui devons la renvoyer à Derrick App, donc pas de hash possible
+ici, contrairement aux clés d'ingestion).
 
 ⚠️ `after()` doit continuer à s'exécuter après l'envoi de la réponse HTTP
 même sur Netlify (Next Runtime) — à vérifier en conditions réelles après
@@ -247,11 +251,22 @@ Les pages étant mises en cache (`unstable_cache`, cf. section Performance),
 Actions (`lib/actions.ts`, immédiat — c'est la seule API garantissant une
 lecture cohérente juste après l'écriture dans ce contexte).
 
-### Variables d'environnement à ajouter
+### Paramètres (`/settings`)
 
-En plus de `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` / `AUTH_USERS` déjà
-documentées : `LEADS_API_KEY` (dev : `.env.local`, prod : dashboard Netlify —
-générer une vraie clé aléatoire, ne pas réutiliser une valeur de test).
+Page accessible depuis la sidebar, propre à chaque compte connecté
+(`getCurrentUserEmail()`, `lib/session.ts`) :
+
+- **Clés API d'ingestion** : créer/révoquer des clés pour `POST /api/leads`
+  (`components/ApiKeyManager.tsx`, Server Actions `lib/settings-actions.ts`).
+  L'URL du webhook à coller dans Make/n8n est affichée dynamiquement (déduite
+  du host de la requête).
+- **Intégrations** : clé API Derrick App par utilisateur
+  (`components/IntegrationSettingForm.tsx`).
+
+Aucune variable d'environnement Netlify n'est nécessaire pour ces deux
+usages — c'est tout l'intérêt de cette page. (`TURSO_DATABASE_URL` /
+`TURSO_AUTH_TOKEN` / `AUTH_USERS` restent des variables d'environnement,
+elles, car nécessaires avant même qu'un compte existe pour se connecter.)
 
 ### Migration de schéma à appliquer
 
