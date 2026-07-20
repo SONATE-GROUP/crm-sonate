@@ -4,15 +4,19 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { createSessionCookieValue, getAccounts, SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/auth";
+import { createSessionCookieValue, getAccounts, isValidEmailFormat, SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/auth";
 
 export type LoginState = { error?: string } | undefined;
 
 export async function login(_prevState: LoginState, formData: FormData): Promise<LoginState> {
-  const username = String(formData.get("username") ?? "").trim();
+  const username = String(formData.get("username") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const nextParam = String(formData.get("next") ?? "/companies");
   const next = nextParam.startsWith("/") ? nextParam : "/companies";
+
+  if (!isValidEmailFormat(username)) {
+    return { error: "L'identifiant doit être une adresse email." };
+  }
 
   const hash = getAccounts()[username];
   if (!hash || !bcrypt.compareSync(password, hash)) {

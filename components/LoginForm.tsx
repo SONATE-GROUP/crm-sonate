@@ -12,8 +12,8 @@ export function LoginForm({ next }: { next: string }) {
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="next" value={next} />
       <div>
-        <label className={labelClass}>Identifiant</label>
-        <input type="text" name="username" required autoFocus className={fieldClass} />
+        <label className={labelClass}>Adresse email</label>
+        <input type="email" name="username" required autoFocus placeholder="prenom@sonate.group" className={fieldClass} />
       </div>
       <div>
         <label className={labelClass}>Mot de passe</label>

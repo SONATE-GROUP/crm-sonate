@@ -1,8 +1,16 @@
 import crypto from "crypto";
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function isValidEmailFormat(value: string): boolean {
+  return EMAIL_PATTERN.test(value);
+}
+
 /**
- * AUTH_USERS="alice:$2b$10$...,bob:$2b$10$..." — paires username:bcryptHash
- * séparées par des virgules. Générer un hash avec scripts/hash-password.ts.
+ * AUTH_USERS="alice@sonate.group:$2b$10$...,bob@sonate.group:$2b$10$..." —
+ * paires email:bcryptHash séparées par des virgules. L'identifiant doit être
+ * une adresse email (les entrées qui n'en sont pas sont ignorées). Générer
+ * un hash avec scripts/hash-password.ts.
  */
 export function getAccounts(): Record<string, string> {
   const raw = process.env.AUTH_USERS ?? "";
@@ -10,9 +18,9 @@ export function getAccounts(): Record<string, string> {
   for (const entry of raw.split(",")) {
     const separatorIndex = entry.indexOf(":");
     if (separatorIndex === -1) continue;
-    const username = entry.slice(0, separatorIndex).trim();
+    const username = entry.slice(0, separatorIndex).trim().toLowerCase();
     const hash = entry.slice(separatorIndex + 1).trim();
-    if (username && hash) accounts[username] = hash;
+    if (username && hash && isValidEmailFormat(username)) accounts[username] = hash;
   }
   return accounts;
 }
@@ -27,18 +35,20 @@ function sign(payload: string): string {
   return crypto.createHmac("sha256", process.env.AUTH_USERS ?? "").update(payload).digest("hex");
 }
 
+// "|" (pas ".") sépare les segments : un email contient des points, un cookie
+// valide ne contient jamais de "|".
 export function createSessionCookieValue(username: string): string {
   const expiry = Date.now() + SESSION_MAX_AGE_SECONDS * 1000;
-  const payload = `${username}.${expiry}`;
-  return `${payload}.${sign(payload)}`;
+  const payload = `${username}|${expiry}`;
+  return `${payload}|${sign(payload)}`;
 }
 
 export function verifySessionCookieValue(cookieValue: string | undefined): string | null {
   if (!cookieValue) return null;
-  const parts = cookieValue.split(".");
+  const parts = cookieValue.split("|");
   if (parts.length !== 3) return null;
   const [username, expiryStr, signature] = parts;
-  const expected = sign(`${username}.${expiryStr}`);
+  const expected = sign(`${username}|${expiryStr}`);
   const expectedBuf = Buffer.from(expected);
   const signatureBuf = Buffer.from(signature);
   if (expectedBuf.length !== signatureBuf.length || !crypto.timingSafeEqual(expectedBuf, signatureBuf)) {

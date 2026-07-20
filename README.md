@@ -258,7 +258,7 @@ un aller-retour transatlantique par requête est le suspect n°1.
 Quelques comptes définis via la variable d'environnement `AUTH_USERS` :
 
 ```
-AUTH_USERS=alice:$2b$10$hash...,bob:$2b$10$hash...
+AUTH_USERS=alice@sonate.group:$2b$10$hash...,bob@sonate.group:$2b$10$hash...
 ```
 
 Générer un hash :
@@ -276,6 +276,11 @@ mot de passe contre `AUTH_USERS` puis pose un cookie de session signé (HMAC,
 de variable d'environnement supplémentaire à gérer, et changer `AUTH_USERS`
 invalide au passage toutes les sessions en cours. Un bouton "Déconnexion" en
 bas de la sidebar (`lib/auth-actions.ts:logout`) supprime le cookie.
+
+**L'identifiant doit être une adresse email** (format vérifié côté client —
+`type="email"` — et côté serveur ; toute entrée `AUTH_USERS` dont la partie
+avant `:` n'a pas la forme d'un email est ignorée). La comparaison est
+insensible à la casse.
 
 ⚠️ **Dans un fichier `.env*` local**, Next.js interprète `$xxx` comme une
 interpolation de variable et casse les hash bcrypt. Échapper chaque `$` en
