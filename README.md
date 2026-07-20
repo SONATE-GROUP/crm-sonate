@@ -125,8 +125,13 @@ stats en haut de chaque liste, badges de statut colorés :
   B2B/B2C, owner, score minimum, plage de dates, pagination). Un bouton
   Kanban/Liste (`components/ViewToggle.tsx`) permet de basculer entre les
   deux vues.
-- `/deals/[id]` : fiche détail d'un deal (deal, entreprise, contacts, autres
-  deals de la même entreprise), commune aux deux vues.
+- `/deals/[id]` : cliquer sur un deal (kanban ou liste) ouvre un **volet
+  latéral** (même mécanisme d'Intercepting + Parallel Routes que companies/
+  contacts, `app/(dashboard)/deals/@modal/(.)[id]`) — deal, changement de
+  statut en un select (même Server Action `updateDealStatus` que le
+  drag-and-drop du kanban), entreprise, contacts, autres deals de la même
+  entreprise. L'URL `/deals/[id]` reste partageable/rechargeable et affiche
+  alors la fiche en page complète.
 
 ## Base vivante — ingestion live des leads (`POST /api/leads`)
 
