@@ -13,11 +13,12 @@ export default async function SettingsPage() {
   const email = user.email;
   const scope = { isAdmin: user.isAdmin, workspaceIds: user.workspaceIds };
 
-  const [keys, derrickSetting, lgmSetting, anthropicSetting, workspaces] = await Promise.all([
+  const [keys, derrickSetting, lgmSetting, anthropicSetting, resendSetting, workspaces] = await Promise.all([
     listApiKeysForOwner(email),
     getIntegrationSettingForOwner(email, "derrick_app"),
     getIntegrationSettingForOwner(email, "lagrowthmachine"),
     getIntegrationSettingForOwner(email, "anthropic"),
+    getIntegrationSettingForOwner(email, "resend"),
     listWorkspacesForScope(scope),
   ]);
 
@@ -94,6 +95,20 @@ export default async function SettingsPage() {
           provider="anthropic"
           configured={anthropicSetting !== null}
           updatedAt={anthropicSetting?.updatedAt ?? null}
+        />
+      </section>
+
+      <section className="mt-10">
+        <h2 className="mb-1 text-lg font-bold text-sonate-green">Resend (envoi d&apos;emails)</h2>
+        <p className="mb-4 text-sm text-sonate-muted">
+          Clé API Resend (resend.com → API Keys), utilisée pour envoyer les emails d&apos;invitation depuis{" "}
+          <span className="font-semibold text-sonate-green">Utilisateurs</span>. Sans cette clé, l&apos;envoi
+          d&apos;invitations échoue.
+        </p>
+        <IntegrationSettingForm
+          provider="resend"
+          configured={resendSetting !== null}
+          updatedAt={resendSetting?.updatedAt ?? null}
         />
       </section>
     </div>

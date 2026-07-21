@@ -309,7 +309,12 @@ c'est tout l'intérêt de cette page. Seules `TURSO_DATABASE_URL` /
 nécessaires avant même qu'une connexion à la base soit possible.
 
 - **Utilisateurs** (`/settings/users`, admin uniquement) : créer des comptes
-  (email, mot de passe, rôle admin/utilisateur) directement en base.
+  (email, mot de passe, rôle admin/utilisateur) directement en base, ou
+  **inviter par email** — un email est envoyé (via Resend, clé API à
+  configurer dans `/settings`) avec un lien `/invite/[token]` où la personne
+  choisit elle-même son mot de passe et active son compte (rattaché
+  directement à l'espace choisi à l'invitation, si renseigné). Lien valable 7
+  jours, révocable depuis la liste des invitations.
 - **Espaces clients** (`/settings/workspaces`, admin uniquement) : créer un
   espace, y ajouter des membres et des entreprises. Un admin voit toutes les
   entreprises ; un utilisateur normal ne voit que celles rattachées à un
