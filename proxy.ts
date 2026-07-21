@@ -3,9 +3,9 @@ import type { NextRequest } from "next/server";
 
 import { SESSION_COOKIE, verifySessionCookieValue } from "@/lib/auth";
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const cookie = request.cookies.get(SESSION_COOKIE)?.value;
-  if (verifySessionCookieValue(cookie)) return NextResponse.next();
+  if (await verifySessionCookieValue(cookie)) return NextResponse.next();
 
   const loginUrl = new URL("/login", request.url);
   loginUrl.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);

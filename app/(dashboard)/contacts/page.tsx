@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { listContacts, getContactStats, PAGE_SIZE } from "@/lib/queries";
+import { getCurrentUser } from "@/lib/session";
 import { fieldClass, labelClass } from "@/lib/ui";
 import { Pagination } from "@/components/Pagination";
 import { PageHeader } from "@/components/PageHeader";
@@ -12,6 +14,10 @@ export default async function ContactsPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  const scope = { isAdmin: user.isAdmin, workspaceIds: user.workspaceIds };
+
   const sp = await searchParams;
   const get = (key: string) => {
     const v = sp[key];
@@ -21,7 +27,10 @@ export default async function ContactsPage({
   const q = get("q");
   const page = Number(get("page") ?? "1") || 1;
 
-  const [{ rows, total, pageCount }, stats] = await Promise.all([listContacts({ q, page }), getContactStats()]);
+  const [{ rows, total, pageCount }, stats] = await Promise.all([
+    listContacts({ q, page, scope }),
+    getContactStats(scope),
+  ]);
 
   const currentParams = { q };
 

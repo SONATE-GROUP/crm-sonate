@@ -1,4 +1,8 @@
 import crypto from "crypto";
+import { eq } from "drizzle-orm";
+
+import { db } from "@/db/client";
+import { appSecrets } from "@/db/schema";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -6,49 +10,59 @@ export function isValidEmailFormat(value: string): boolean {
   return EMAIL_PATTERN.test(value);
 }
 
-/**
- * AUTH_USERS="alice@sonate.group:$2b$10$...,bob@sonate.group:$2b$10$..." —
- * paires email:bcryptHash séparées par des virgules. L'identifiant doit être
- * une adresse email (les entrées qui n'en sont pas sont ignorées). Générer
- * un hash avec scripts/hash-password.ts.
- */
-export function getAccounts(): Record<string, string> {
-  const raw = process.env.AUTH_USERS ?? "";
-  const accounts: Record<string, string> = {};
-  for (const entry of raw.split(",")) {
-    const separatorIndex = entry.indexOf(":");
-    if (separatorIndex === -1) continue;
-    const username = entry.slice(0, separatorIndex).trim().toLowerCase();
-    const hash = entry.slice(separatorIndex + 1).trim();
-    if (username && hash && isValidEmailFormat(username)) accounts[username] = hash;
-  }
-  return accounts;
-}
-
 export const SESSION_COOKIE = "crm_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
-// Signe les cookies de session avec AUTH_USERS comme clé : évite d'introduire
-// une variable d'environnement dédiée pour ça, et changer AUTH_USERS invalide
-// au passage toutes les sessions existantes (comportement voulu).
-function sign(payload: string): string {
-  return crypto.createHmac("sha256", process.env.AUTH_USERS ?? "").update(payload).digest("hex");
+const SESSION_SECRET_KEY = "session_secret";
+
+// Mis en cache au niveau du process (une lambda "chaude" réutilise cette
+// valeur) : évite une lecture DB à chaque requête tout en évitant
+// d'introduire une variable d'environnement dédiée pour ce secret.
+let cachedSecret: string | null = null;
+
+async function getSessionSecret(): Promise<string> {
+  if (cachedSecret) return cachedSecret;
+
+  const [existing] = await db.select().from(appSecrets).where(eq(appSecrets.key, SESSION_SECRET_KEY)).limit(1);
+  if (existing) {
+    cachedSecret = existing.value;
+    return cachedSecret;
+  }
+
+  const generated = crypto.randomBytes(32).toString("hex");
+  await db.insert(appSecrets).values({ key: SESSION_SECRET_KEY, value: generated }).onConflictDoNothing({ target: appSecrets.key });
+  const [row] = await db.select().from(appSecrets).where(eq(appSecrets.key, SESSION_SECRET_KEY)).limit(1);
+  cachedSecret = row!.value;
+  return cachedSecret;
 }
 
-// "|" (pas ".") sépare les segments : un email contient des points, un cookie
-// valide ne contient jamais de "|".
-export function createSessionCookieValue(username: string): string {
+async function sign(payload: string): Promise<string> {
+  const secret = await getSessionSecret();
+  return crypto.createHmac("sha256", secret).update(payload).digest("hex");
+}
+
+// "|" (pas ".") sépare les segments : un id numérique et une expiry ne
+// contiennent jamais de "|".
+export async function createSessionCookieValue(userId: number): Promise<string> {
   const expiry = Date.now() + SESSION_MAX_AGE_SECONDS * 1000;
-  const payload = `${username}|${expiry}`;
-  return `${payload}|${sign(payload)}`;
+  const payload = `${userId}|${expiry}`;
+  return `${payload}|${await sign(payload)}`;
 }
 
-export function verifySessionCookieValue(cookieValue: string | undefined): string | null {
+/**
+ * Vérifie la signature et l'expiration du cookie et retourne l'id utilisateur
+ * signé. Volontairement stateless (pas de lecture de la table `users` ici) :
+ * appelée depuis proxy.ts sur (presque) chaque requête, elle reste rapide et
+ * ne dépend que du secret de signature en cache. La vérification que
+ * l'utilisateur existe toujours / son rôle / ses espaces se fait plus loin
+ * (lib/session.ts, dans les Server Components) où l'accès DB est normal.
+ */
+export async function verifySessionCookieValue(cookieValue: string | undefined): Promise<number | null> {
   if (!cookieValue) return null;
   const parts = cookieValue.split("|");
   if (parts.length !== 3) return null;
-  const [username, expiryStr, signature] = parts;
-  const expected = sign(`${username}|${expiryStr}`);
+  const [userIdStr, expiryStr, signature] = parts;
+  const expected = await sign(`${userIdStr}|${expiryStr}`);
   const expectedBuf = Buffer.from(expected);
   const signatureBuf = Buffer.from(signature);
   if (expectedBuf.length !== signatureBuf.length || !crypto.timingSafeEqual(expectedBuf, signatureBuf)) {
@@ -56,6 +70,7 @@ export function verifySessionCookieValue(cookieValue: string | undefined): strin
   }
   const expiry = Number(expiryStr);
   if (!Number.isFinite(expiry) || Date.now() > expiry) return null;
-  if (!getAccounts()[username]) return null;
-  return username;
+  const userId = Number(userIdStr);
+  if (!Number.isInteger(userId)) return null;
+  return userId;
 }

@@ -43,6 +43,13 @@
       "when": 1784619842711,
       "tag": "0005_graceful_the_leader",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784624855898,
+      "tag": "0006_rapid_proteus",
+      "breakpoints": true
     }
   ]
 }

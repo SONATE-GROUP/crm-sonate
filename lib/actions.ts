@@ -4,15 +4,31 @@ import { eq } from "drizzle-orm";
 import { updateTag } from "next/cache";
 
 import { db } from "@/db/client";
-import { contacts, deals, pendingLeads, DEAL_STATUS_VALUES, type DealStatus } from "@/db/schema";
+import { companies, contacts, deals, pendingLeads, DEAL_STATUS_VALUES, type DealStatus } from "@/db/schema";
 import type { LeadPayload } from "@/lib/ingest";
 import { cleanText, normalizeEmail } from "@/lib/normalize";
+import { getCurrentUser } from "@/lib/session";
 
 /** Changement de statut depuis le board kanban (drag-and-drop). */
 export async function updateDealStatus(dealId: number, status: DealStatus) {
   if (!DEAL_STATUS_VALUES.includes(status)) {
     throw new Error(`Statut de deal invalide: "${status}"`);
   }
+
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Non authentifié.");
+  if (!user.isAdmin) {
+    const [row] = await db
+      .select({ workspaceId: companies.workspaceId })
+      .from(deals)
+      .innerJoin(companies, eq(deals.companyId, companies.id))
+      .where(eq(deals.id, dealId))
+      .limit(1);
+    if (!row || row.workspaceId === null || !user.workspaceIds.includes(row.workspaceId)) {
+      throw new Error("Accès refusé à ce deal.");
+    }
+  }
+
   await db.update(deals).set({ status, updatedAt: new Date() }).where(eq(deals.id, dealId));
   updateTag("crm-data");
 }

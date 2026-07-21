@@ -101,6 +101,66 @@ export const DEAL_STATUS_LABELS: Record<DealStatus, string> = {
   lapin: "Lapin",
 };
 
+export const USER_ROLE_VALUES = ["admin", "user"] as const;
+export type UserRole = (typeof USER_ROLE_VALUES)[number];
+
+/**
+ * Comptes utilisateurs — remplace l'ancienne variable d'environnement
+ * AUTH_USERS. Un admin a accès à tous les espaces (cf. workspaceMembers) sans
+ * avoir besoin d'y être ajouté explicitement.
+ */
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  fullName: text("full_name").notNull(),
+  role: text("role", { enum: USER_ROLE_VALUES }).notNull().default("user"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
+/** Espaces clients (libres, créés à la main par un admin) — cf. workspaceMembers. */
+export const workspaces = sqliteTable("workspaces", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
+export const WORKSPACE_MEMBER_ROLE_VALUES = ["owner", "reader"] as const;
+export type WorkspaceMemberRole = (typeof WORKSPACE_MEMBER_ROLE_VALUES)[number];
+
+/** Appartenance many-to-many utilisateur <-> espace (un utilisateur peut être dans plusieurs espaces). */
+export const workspaceMembers = sqliteTable(
+  "workspace_members",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    workspaceId: integer("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role", { enum: WORKSPACE_MEMBER_ROLE_VALUES }).notNull().default("owner"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [unique().on(table.workspaceId, table.userId)]
+);
+
+/**
+ * Secrets applicatifs générés et stockés en base (ex. clé de signature des
+ * cookies de session) — évite d'introduire une variable d'environnement
+ * Vercel dédiée juste pour ça. Générée au premier démarrage si absente.
+ */
+export const appSecrets = sqliteTable("app_secrets", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
 export const companies = sqliteTable("companies", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
@@ -109,6 +169,10 @@ export const companies = sqliteTable("companies", {
   b2bB2c: text("b2b_b2c", { enum: B2B_B2C_VALUES }),
   linkedinUrl: text("linkedin_url"),
   sourceSystem: text("source_system", { enum: SOURCE_SYSTEM_VALUES }).notNull(),
+  // Périmètre libre créé par un admin (cf. workspaces) ; contacts/deals
+  // héritent de la portée via l'entreprise. Nullable : une entreprise sans
+  // espace assigné n'est visible que par les admins.
+  workspaceId: integer("workspace_id").references(() => workspaces.id, { onDelete: "set null" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),
