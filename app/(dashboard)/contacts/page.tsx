@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import { listContacts, getContactStats, PAGE_SIZE } from "@/lib/queries";
-import { getCurrentUser } from "@/lib/session";
+import { requireActiveWorkspace } from "@/lib/session";
 import { fieldClass, labelClass } from "@/lib/ui";
 import { Pagination } from "@/components/Pagination";
 import { PageHeader } from "@/components/PageHeader";
@@ -14,9 +13,8 @@ export default async function ContactsPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  const scope = { isAdmin: user.isAdmin, workspaceIds: user.workspaceIds };
+  const { workspaceId } = await requireActiveWorkspace("/contacts");
+  const scope = { workspaceId };
 
   const sp = await searchParams;
   const get = (key: string) => {

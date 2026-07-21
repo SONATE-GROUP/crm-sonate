@@ -7,7 +7,7 @@ import { db } from "@/db/client";
 import { companies, contacts, deals, pendingLeads, DEAL_STATUS_VALUES, type DealStatus } from "@/db/schema";
 import type { LeadPayload } from "@/lib/ingest";
 import { cleanText, normalizeEmail } from "@/lib/normalize";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, resolveActiveWorkspace } from "@/lib/session";
 
 /** Changement de statut depuis le board kanban (drag-and-drop). */
 export async function updateDealStatus(dealId: number, status: DealStatus) {
@@ -17,16 +17,19 @@ export async function updateDealStatus(dealId: number, status: DealStatus) {
 
   const user = await getCurrentUser();
   if (!user) throw new Error("Non authentifié.");
-  if (!user.isAdmin) {
-    const [row] = await db
-      .select({ workspaceId: companies.workspaceId })
-      .from(deals)
-      .innerJoin(companies, eq(deals.companyId, companies.id))
-      .where(eq(deals.id, dealId))
-      .limit(1);
-    if (!row || row.workspaceId === null || !user.workspaceIds.includes(row.workspaceId)) {
-      throw new Error("Accès refusé à ce deal.");
-    }
+  const resolution = await resolveActiveWorkspace(user);
+  if (resolution.status !== "resolved") throw new Error("Aucun espace actif.");
+
+  // Comme partout ailleurs (HubSpot-style), même un admin n'agit que dans son
+  // espace actif du moment — pas de bypass "tous espaces".
+  const [row] = await db
+    .select({ workspaceId: companies.workspaceId })
+    .from(deals)
+    .innerJoin(companies, eq(deals.companyId, companies.id))
+    .where(eq(deals.id, dealId))
+    .limit(1);
+  if (!row || row.workspaceId !== resolution.workspaceId) {
+    throw new Error("Accès refusé à ce deal.");
   }
 
   await db.update(deals).set({ status, updatedAt: new Date() }).where(eq(deals.id, dealId));
@@ -40,8 +43,22 @@ export async function updateDealStatus(dealId: number, status: DealStatus) {
  * (jamais de fusion "silencieuse" qui écraserait des champs existants).
  */
 export async function mergePendingLead(pendingLeadId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Non authentifié.");
+  const resolution = await resolveActiveWorkspace(user);
+  if (resolution.status !== "resolved") throw new Error("Aucun espace actif.");
+
   const [pending] = await db.select().from(pendingLeads).where(eq(pendingLeads.id, pendingLeadId)).limit(1);
   if (!pending || pending.status !== "pending" || !pending.matchedCompanyId) return;
+
+  const [company] = await db
+    .select({ workspaceId: companies.workspaceId })
+    .from(companies)
+    .where(eq(companies.id, pending.matchedCompanyId))
+    .limit(1);
+  if (!company || company.workspaceId !== resolution.workspaceId) {
+    throw new Error("Accès refusé à ce lead en attente.");
+  }
 
   const companyId = pending.matchedCompanyId;
   const payload: LeadPayload = JSON.parse(pending.rawPayload);
@@ -86,6 +103,24 @@ export async function mergePendingLead(pendingLeadId: number) {
 
 /** Rejette une proposition de fusion : rien n'est créé, le lead reste tracé mais ignoré. */
 export async function dismissPendingLead(pendingLeadId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Non authentifié.");
+  const resolution = await resolveActiveWorkspace(user);
+  if (resolution.status !== "resolved") throw new Error("Aucun espace actif.");
+
+  const [pending] = await db.select().from(pendingLeads).where(eq(pendingLeads.id, pendingLeadId)).limit(1);
+  if (!pending) return;
+  if (pending.matchedCompanyId) {
+    const [company] = await db
+      .select({ workspaceId: companies.workspaceId })
+      .from(companies)
+      .where(eq(companies.id, pending.matchedCompanyId))
+      .limit(1);
+    if (!company || company.workspaceId !== resolution.workspaceId) {
+      throw new Error("Accès refusé à ce lead en attente.");
+    }
+  }
+
   await db
     .update(pendingLeads)
     .set({ status: "dismissed", resolvedAt: new Date() })

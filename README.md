@@ -330,6 +330,17 @@ nécessaires avant même qu'une connexion à la base soit possible.
   fois toutes les données historiques (importées avant les espaces) vers cet
   espace.
 
+  **Un espace actif à la fois, comme le portail switcher HubSpot** : après
+  connexion, si l'utilisateur a accès à plusieurs espaces (ou est admin —
+  qui a accès à tous), il choisit celui dans lequel il travaille
+  (`/select-workspace`) ; tant qu'il n'y a qu'un seul espace accessible, il
+  est sélectionné automatiquement, sans étape supplémentaire. L'espace actif
+  est mémorisé dans un cookie (`crm_active_workspace`, revalidé à chaque
+  lecture contre les espaces réellement accessibles) et affiché/changeable
+  depuis la sidebar. Il n'y a jamais de vue "tous espaces confondus", même
+  pour un admin — cf. `lib/session.ts` (`resolveActiveWorkspace`,
+  `requireActiveWorkspace`).
+
 ### Migrations de schéma
 
 Chaque évolution du schéma (`db/schema.ts`) nécessite d'appliquer la

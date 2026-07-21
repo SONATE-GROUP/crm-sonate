@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 import { getCompanyDetail } from "@/lib/queries";
-import { getCurrentUser } from "@/lib/session";
+import { requireActiveWorkspace } from "@/lib/session";
 import { Field, Section } from "@/components/DetailSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EnrichmentPanel } from "@/components/EnrichmentPanel";
@@ -23,14 +23,12 @@ export default async function CompanyDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
-
   const { id } = await params;
   const companyId = Number(id);
   if (!Number.isInteger(companyId)) notFound();
 
-  const detail = await getCompanyDetail(companyId, { isAdmin: user.isAdmin, workspaceIds: user.workspaceIds });
+  const { workspaceId } = await requireActiveWorkspace(`/companies/${id}`);
+  const detail = await getCompanyDetail(companyId, { workspaceId });
   if (!detail) notFound();
 
   const { company, contacts, deals, pendingLeads } = detail;

@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { LogOut, Settings, ShieldCheck, UserCog } from "lucide-react";
+import { ChevronsUpDown, LogOut, Settings, ShieldCheck, UserCog } from "lucide-react";
 
 import { NavLinks } from "@/components/NavLinks";
 import { logout } from "@/lib/auth-actions";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, resolveActiveWorkspace } from "@/lib/session";
 
 export default async function DashboardLayout({
   children,
@@ -11,6 +11,9 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }>) {
   const user = await getCurrentUser();
+  const resolution = user ? await resolveActiveWorkspace(user) : null;
+  const activeWorkspaceName =
+    resolution?.status === "resolved" ? resolution.available.find((w) => w.id === resolution.workspaceId)?.name : null;
 
   return (
     <div className="flex min-h-full">
@@ -18,6 +21,13 @@ export default async function DashboardLayout({
         <Link href="/companies" className="flex flex-col px-6 py-6 leading-none">
           <span className="text-2xl font-extrabold tracking-tight">Sonate</span>
           <span className="mt-0.5 text-[11px] font-medium text-sonate-cream/60">CRM interne</span>
+        </Link>
+        <Link
+          href="/select-workspace"
+          className="mx-3 mb-2 flex items-center justify-between gap-2 rounded-xl bg-sonate-cream/10 px-3 py-2.5 text-sm font-semibold text-sonate-cream hover:bg-sonate-cream/15"
+        >
+          <span className="truncate">{activeWorkspaceName ?? "Choisir un espace"}</span>
+          <ChevronsUpDown size={15} strokeWidth={2} className="shrink-0 text-sonate-cream/60" />
         </Link>
         <div className="px-6 pb-2 text-[11px] font-semibold uppercase tracking-wide text-sonate-cream/40">
           Pipeline
