@@ -22,19 +22,25 @@ import {
 export const PAGE_SIZE = 50;
 
 /**
- * Périmètre d'accès de l'utilisateur courant (cf. lib/session.ts) : un admin
- * voit tout, un utilisateur normal ne voit que les entreprises (et
- * contacts/deals hérités) rattachées à un de ses espaces. Requis sur toutes
- * les requêtes de liste/détail/stats pour ne jamais oublier le filtrage.
+ * Espace actif de l'utilisateur courant (cf. lib/session.ts requireActiveWorkspace)
+ * — comme HubSpot, on opère toujours dans UN espace à la fois, même en tant
+ * qu'admin (pas de vue "tous espaces confondus"). Requis sur toutes les
+ * requêtes de liste/détail/stats pour ne jamais oublier le filtrage.
  */
-export type Scope = { isAdmin: boolean; workspaceIds: number[] };
+export type DataScope = { workspaceId: number };
 
-/** Condition SQL à ajouter sur `companies.workspaceId` (ou une jointure vers companies) selon le périmètre. */
-function scopeCondition(scope: Scope) {
-  if (scope.isAdmin) return undefined;
-  if (scope.workspaceIds.length === 0) return sql`0 = 1`;
-  return inArray(companies.workspaceId, scope.workspaceIds);
+/** Condition SQL à ajouter sur `companies.workspaceId` (ou une jointure vers companies) selon l'espace actif. */
+function scopeCondition(scope: DataScope) {
+  return eq(companies.workspaceId, scope.workspaceId);
 }
+
+/**
+ * Périmètre d'ACCÈS (quels espaces cet utilisateur peut-il choisir ?) — pas le
+ * même concept que DataScope (l'espace UNIQUE actuellement actif). Un admin
+ * peut choisir n'importe quel espace ; un utilisateur normal seulement les
+ * siens. Utilisé par le sélecteur d'espace et le choix d'espace d'une clé API.
+ */
+export type WorkspaceAccess = { isAdmin: boolean; workspaceIds: number[] };
 
 // Les données changent maintenant aussi via l'ingestion live (lib/ingest.ts)
 // et les actions de fusion (lib/actions.ts), en plus du script d'import batch.
@@ -54,7 +60,7 @@ export type DealListFilters = {
   dateFrom?: string;
   dateTo?: string;
   page?: number;
-  scope: Scope;
+  scope: DataScope;
 };
 
 export type DealKanbanFilters = Omit<DealListFilters, "status" | "page">;
@@ -178,7 +184,7 @@ export const listDealsForKanban = unstable_cache(_listDealsForKanban, ["list-dea
 });
 export type KanbanDeal = Awaited<ReturnType<typeof _listDealsForKanban>>[number];
 
-async function _listOwners(scope: Scope) {
+async function _listOwners(scope: DataScope) {
   const scoped = scopeCondition(scope);
   const where = scoped ? and(sql`${deals.owner} is not null`, scoped) : sql`${deals.owner} is not null`;
   const rows = await db
@@ -197,7 +203,7 @@ export type CompanyListFilters = {
   b2bB2c?: B2bB2c;
   sourceSystem?: SourceSystem;
   page?: number;
-  scope: Scope;
+  scope: DataScope;
 };
 
 function buildCompaniesWhere(filters: CompanyListFilters) {
@@ -276,12 +282,11 @@ export type PendingLead = {
   payload: import("@/lib/ingest").LeadPayload;
 };
 
-function canAccessWorkspace(scope: Scope, workspaceId: number | null): boolean {
-  if (scope.isAdmin) return true;
-  return workspaceId !== null && scope.workspaceIds.includes(workspaceId);
+function canAccessWorkspace(scope: DataScope, workspaceId: number | null): boolean {
+  return workspaceId === scope.workspaceId;
 }
 
-async function _getCompanyDetail(id: number, scope: Scope) {
+async function _getCompanyDetail(id: number, scope: DataScope) {
   const [company] = await db.select().from(companies).where(eq(companies.id, id)).limit(1);
   if (!company || !canAccessWorkspace(scope, company.workspaceId)) return null;
 
@@ -312,7 +317,7 @@ export const getCompanyDetail = unstable_cache(_getCompanyDetail, ["get-company-
 export type ContactListFilters = {
   q?: string;
   page?: number;
-  scope: Scope;
+  scope: DataScope;
 };
 
 function buildContactsWhere(filters: ContactListFilters) {
@@ -379,7 +384,7 @@ async function _listContacts(filters: ContactListFilters) {
 export const listContacts = unstable_cache(_listContacts, ["list-contacts"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });
 export type ContactRow = Awaited<ReturnType<typeof _listContacts>>["rows"][number];
 
-async function _getContactDetail(id: number, scope: Scope) {
+async function _getContactDetail(id: number, scope: DataScope) {
   const [contact] = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
   if (!contact) return null;
 
@@ -409,7 +414,7 @@ export const getConversationsForContact = unstable_cache(_getConversationsForCon
 });
 export type ConversationMessage = Awaited<ReturnType<typeof _getConversationsForContact>>[number];
 
-async function _getDealDetail(id: number, scope: Scope) {
+async function _getDealDetail(id: number, scope: DataScope) {
   const [deal] = await db.select().from(deals).where(eq(deals.id, id)).limit(1);
   if (!deal) return null;
 
@@ -430,7 +435,7 @@ function toDate(epochSeconds: number | null): Date | null {
 
 export type DealStats = { total: number; gagne: number; perdu: number; avgScore: number | null; lastImport: Date | null };
 
-async function _getDealStats(scope: Scope): Promise<DealStats> {
+async function _getDealStats(scope: DataScope): Promise<DealStats> {
   const scoped = scopeCondition(scope);
   const query = db
     .select({
@@ -462,7 +467,7 @@ export type CompanyStats = {
   lastImport: Date | null;
 };
 
-async function _getCompanyStats(scope: Scope): Promise<CompanyStats> {
+async function _getCompanyStats(scope: DataScope): Promise<CompanyStats> {
   const scoped = scopeCondition(scope);
   const companyQuery = db
     .select({
@@ -494,7 +499,7 @@ export const getCompanyStats = unstable_cache(_getCompanyStats, ["company-stats"
 
 export type ContactStats = { total: number; withEmail: number; withPhone: number; lastImport: Date | null };
 
-async function _getContactStats(scope: Scope): Promise<ContactStats> {
+async function _getContactStats(scope: DataScope): Promise<ContactStats> {
   const scoped = scopeCondition(scope);
   const query = db
     .select({
@@ -537,15 +542,15 @@ export async function listApiKeysForOwner(ownerEmail: string) {
 }
 
 /** Espaces auxquels l'utilisateur a accès (tous si admin, ses memberships sinon) — pour les sélecteurs d'espace côté UI. */
-export async function listWorkspacesForScope(scope: Scope) {
-  if (scope.isAdmin) {
+export async function listWorkspacesForScope(access: WorkspaceAccess) {
+  if (access.isAdmin) {
     return db.select({ id: workspaces.id, name: workspaces.name }).from(workspaces).orderBy(asc(workspaces.name));
   }
-  if (scope.workspaceIds.length === 0) return [];
+  if (access.workspaceIds.length === 0) return [];
   return db
     .select({ id: workspaces.id, name: workspaces.name })
     .from(workspaces)
-    .where(inArray(workspaces.id, scope.workspaceIds))
+    .where(inArray(workspaces.id, access.workspaceIds))
     .orderBy(asc(workspaces.name));
 }
 

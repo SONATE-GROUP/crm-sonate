@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 import { getContactDetail, getConversationsForContact } from "@/lib/queries";
-import { getCurrentUser } from "@/lib/session";
+import { requireActiveWorkspace } from "@/lib/session";
 import { Drawer } from "@/components/Drawer";
 import { DrawerSection, DrawerRow } from "@/components/DrawerSection";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -20,14 +20,12 @@ export default async function ContactModal({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
-
   const { id } = await params;
   const contactId = Number(id);
   if (!Number.isInteger(contactId)) notFound();
 
-  const detail = await getContactDetail(contactId, { isAdmin: user.isAdmin, workspaceIds: user.workspaceIds });
+  const { workspaceId } = await requireActiveWorkspace(`/contacts/${id}`);
+  const detail = await getContactDetail(contactId, { workspaceId });
   if (!detail) notFound();
 
   const { contact, company, deals } = detail;
