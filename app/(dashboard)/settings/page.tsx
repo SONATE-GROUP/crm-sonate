@@ -4,19 +4,21 @@ import { redirect } from "next/navigation";
 import { ApiKeyManager } from "@/components/ApiKeyManager";
 import { IntegrationSettingForm } from "@/components/IntegrationSettingForm";
 import { PageHeader } from "@/components/PageHeader";
-import { getIntegrationSettingForOwner, listApiKeysForOwner } from "@/lib/queries";
+import { getIntegrationSettingForOwner, listApiKeysForOwner, listWorkspacesForScope } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/session";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const email = user.email;
+  const scope = { isAdmin: user.isAdmin, workspaceIds: user.workspaceIds };
 
-  const [keys, derrickSetting, lgmSetting, anthropicSetting] = await Promise.all([
+  const [keys, derrickSetting, lgmSetting, anthropicSetting, workspaces] = await Promise.all([
     listApiKeysForOwner(email),
     getIntegrationSettingForOwner(email, "derrick_app"),
     getIntegrationSettingForOwner(email, "lagrowthmachine"),
     getIntegrationSettingForOwner(email, "anthropic"),
+    listWorkspacesForScope(scope),
   ]);
 
   const hdrs = await headers();
@@ -44,7 +46,7 @@ export default async function SettingsPage() {
         <code className="mb-5 block break-all rounded-lg bg-sonate-green/5 px-3 py-2 text-sm text-sonate-green">
           POST {webhookUrl}
         </code>
-        <ApiKeyManager initialKeys={keys} />
+        <ApiKeyManager initialKeys={keys} workspaces={workspaces} />
       </section>
 
       <section>

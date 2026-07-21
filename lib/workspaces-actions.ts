@@ -1,11 +1,19 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { revalidateTag } from "next/cache";
 
 import { db } from "@/db/client";
-import { companies, users, workspaceMembers, workspaces, WORKSPACE_MEMBER_ROLE_VALUES, type WorkspaceMemberRole } from "@/db/schema";
+import {
+  apiKeys,
+  companies,
+  users,
+  workspaceMembers,
+  workspaces,
+  WORKSPACE_MEMBER_ROLE_VALUES,
+  type WorkspaceMemberRole,
+} from "@/db/schema";
 import { requireAdmin } from "@/lib/session";
 
 export type WorkspaceFormState = { error?: string } | undefined;
@@ -86,4 +94,25 @@ export async function assignCompanyWorkspace(companyId: number, workspaceId: num
   await db.update(companies).set({ workspaceId }).where(eq(companies.id, companyId));
   revalidatePath("/settings/workspaces");
   revalidateTag("crm-data", { expire: 0 });
+}
+
+/**
+ * Bascule en une fois toutes les entreprises (et clés API d'ingestion) pas
+ * encore rattachées à un espace vers l'espace donné — utile une seule fois
+ * pour rattacher les données historiques (importées avant l'introduction des
+ * espaces) à un espace par défaut. N'affecte jamais une entreprise/clé déjà
+ * rattachée ailleurs (aucun transfert entre espaces).
+ */
+export async function bulkAssignUnassignedToWorkspace(workspaceId: number) {
+  await requireAdmin();
+
+  const [assignedCompanies, assignedKeys] = await Promise.all([
+    db.update(companies).set({ workspaceId }).where(isNull(companies.workspaceId)).returning({ id: companies.id }),
+    db.update(apiKeys).set({ workspaceId }).where(isNull(apiKeys.workspaceId)).returning({ id: apiKeys.id }),
+  ]);
+
+  revalidatePath("/settings/workspaces");
+  revalidatePath("/settings");
+  revalidateTag("crm-data", { expire: 0 });
+  return { companiesAssigned: assignedCompanies.length, keysAssigned: assignedKeys.length };
 }

@@ -43,8 +43,10 @@ plusieurs fois (une fois par source) sans dupliquer les entreprises/contacts
 déjà importés :
 
 ```bash
-npx tsx scripts/import.ts --csv chemin/vers/export.csv --source deuxio
+npx tsx scripts/import.ts --csv chemin/vers/export.csv --source deuxio --workspace "Sonate"
 # --source accepte: deuxio | wedig | letsclic
+# --workspace : nom d'un espace existant (créé depuis /settings/workspaces) —
+# aucune entreprise ne peut être créée hors espace.
 ```
 
 À la fin de l'import, un rapport est affiché : lignes lues, lignes importées
@@ -314,6 +316,20 @@ nécessaires avant même qu'une connexion à la base soit possible.
   espace dont il est membre (contacts/deals héritent de la portée via
   l'entreprise).
 
+  **Rattachement définitif, comme les business units HubSpot** : une fois
+  qu'une entreprise appartient à un espace, elle ne peut plus en changer —
+  aucun transfert entre espaces (cloisonnement RGPD des données clients).
+  Une entreprise ne peut donc être créée que dans un espace précis. En
+  pratique, ça se joue au niveau des **clés API d'ingestion**
+  (`/settings`, section Webhook) : chaque clé est rattachée à un espace, et
+  tous les leads qu'elle ingère (`POST /api/leads`, Make/n8n) atterrissent
+  dans cet espace. Une clé sans espace (créées avant l'introduction des
+  espaces) est refusée par le webhook (`409 no_workspace`) tant qu'elle n'a
+  pas été rattachée. Le bouton **"Rattacher ici toutes les entreprises (et
+  clés API) sans espace"** sur la page d'un espace permet de basculer en une
+  fois toutes les données historiques (importées avant les espaces) vers cet
+  espace.
+
 ### Migrations de schéma
 
 Chaque évolution du schéma (`db/schema.ts`) nécessite d'appliquer la
@@ -366,7 +382,7 @@ le cookie.
 ```bash
 npm install
 npx drizzle-kit push                                  # applique le schéma (local.db par défaut)
-npx tsx scripts/import.ts --csv <csv> --source deuxio  # importe les données
+npx tsx scripts/import.ts --csv <csv> --source deuxio --workspace "Sonate"  # importe les données
 npm run dev
 ```
 

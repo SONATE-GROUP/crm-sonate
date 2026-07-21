@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
+import { eq } from "drizzle-orm";
 import { parse } from "csv-parse/sync";
 import { db } from "../db/client";
-import { companies, contacts, deals, type DealStatus, type SourceSystem } from "../db/schema";
+import { companies, contacts, deals, workspaces, type DealStatus, type SourceSystem } from "../db/schema";
 import { cleanText, normalizeCompanyKey, normalizeEmail } from "../lib/normalize";
 
 // Le CLI ne couvre que les 3 sources historiques d'import batch — "api" (leads
@@ -29,11 +30,11 @@ function parseArgs(argv: string[]) {
   return parsed;
 }
 
-function requireArgs(): { csvPath: string; sourceSystem: SourceSystem } {
+function requireArgs(): { csvPath: string; sourceSystem: SourceSystem; workspaceName: string } {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.csv || !args.source) {
+  if (!args.csv || !args.source || !args.workspace) {
     console.error(
-      "Usage: tsx scripts/import.ts --csv <path/to/export.csv> --source <deuxio|wedig|letsclic>"
+      "Usage: tsx scripts/import.ts --csv <path/to/export.csv> --source <deuxio|wedig|letsclic> --workspace <nom de l'espace>"
     );
     process.exit(1);
   }
@@ -43,10 +44,22 @@ function requireArgs(): { csvPath: string; sourceSystem: SourceSystem } {
     );
     process.exit(1);
   }
-  return { csvPath: args.csv, sourceSystem: args.source as SourceSystem };
+  return { csvPath: args.csv, sourceSystem: args.source as SourceSystem, workspaceName: args.workspace };
 }
 
-const { csvPath, sourceSystem } = requireArgs();
+const { csvPath, sourceSystem, workspaceName } = requireArgs();
+
+// Aucune entreprise ne peut être créée hors espace (cf. lib/ingest.ts) : ce
+// script batch respecte la même règle, l'espace cible est résolu une fois au
+// démarrage.
+async function resolveWorkspaceId(name: string): Promise<number> {
+  const [workspace] = await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.name, name)).limit(1);
+  if (!workspace) {
+    console.error(`--workspace "${name}" introuvable. Crée-le d'abord depuis /settings/workspaces.`);
+    process.exit(1);
+  }
+  return workspace.id;
+}
 
 // --- Normalisation helpers ---------------------------------------------------
 // cleanText / normalizeEmail / normalizeCompanyKey viennent de lib/normalize.ts
@@ -215,6 +228,8 @@ async function preloadExisting() {
 }
 
 async function main() {
+  const workspaceId = await resolveWorkspaceId(workspaceName);
+
   const raw = readFileSync(csvPath, "utf-8");
   const rows: Row[] = parse(raw, {
     columns: true,
@@ -224,6 +239,7 @@ async function main() {
 
   console.log(`Fichier: ${csvPath}`);
   console.log(`Source système: ${sourceSystem}`);
+  console.log(`Espace: ${workspaceName}`);
   console.log(`Lignes lues: ${rows.length}\n`);
 
   const { companyIdByKey, contactIdByCompanyAndEmail } = await preloadExisting();
@@ -258,6 +274,7 @@ async function main() {
           b2bB2c: normalizeB2bB2c(row["B2B/B2C"]),
           linkedinUrl: cleanText(row["Linkedin"]),
           sourceSystem,
+          workspaceId,
           createdAt: rowDate,
         })
         .returning({ id: companies.id });

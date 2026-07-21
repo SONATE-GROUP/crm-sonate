@@ -276,6 +276,11 @@ export const apiKeys = sqliteTable("api_keys", {
   label: text("label").notNull(),
   keyHash: text("key_hash").notNull().unique(),
   keyPreview: text("key_preview").notNull(),
+  // Espace dans lequel cette clé fait atterrir les nouveaux leads ingérés
+  // (POST /api/leads) — nullable seulement pour les clés créées avant
+  // l'introduction des espaces ; toute clé nouvellement créée en a un
+  // obligatoirement (cf. lib/settings-actions.ts createApiKey).
+  workspaceId: integer("workspace_id").references(() => workspaces.id),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),

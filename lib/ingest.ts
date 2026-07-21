@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { revalidateTag } from "next/cache";
 
 import { db } from "@/db/client";
@@ -80,8 +80,15 @@ export type IngestResult =
  * fusionne jamais automatiquement : toute correspondance (email du contact
  * OU nom d'entreprise normalisé) fait atterrir le lead dans `pending_leads`
  * pour validation humaine — cf. lib/actions.ts pour la fusion effective.
+ *
+ * `workspaceId` vient de la clé API utilisée (chaque clé est rattachée à un
+ * espace, cf. db/schema.ts apiKeys) : une entreprise ne peut jamais être créée
+ * hors d'un espace, et le matching (email/nom) ne considère jamais une
+ * entreprise d'un AUTRE espace — sinon deux clients avec le même email de
+ * contact ou le même nom d'entreprise finiraient fusionnés dans pending_leads,
+ * ce qui romprait le cloisonnement RGPD entre espaces.
  */
-export async function ingestLead(payload: LeadPayload): Promise<IngestResult> {
+export async function ingestLead(payload: LeadPayload, workspaceId: number): Promise<IngestResult> {
   assertValidPayload(payload);
 
   const companyName = cleanText(payload.company.name)!;
@@ -95,7 +102,8 @@ export async function ingestLead(payload: LeadPayload): Promise<IngestResult> {
     const [match] = await db
       .select({ id: contacts.id, companyId: contacts.companyId })
       .from(contacts)
-      .where(sql`lower(${contacts.email}) = ${email}`)
+      .innerJoin(companies, eq(contacts.companyId, companies.id))
+      .where(and(sql`lower(${contacts.email}) = ${email}`, eq(companies.workspaceId, workspaceId)))
       .limit(1);
     if (match) {
       matchedContactId = match.id;
@@ -104,13 +112,16 @@ export async function ingestLead(payload: LeadPayload): Promise<IngestResult> {
   }
 
   if (!matchedCompanyId) {
-    // Charge tout le nom des entreprises pour comparer les clés normalisées en
-    // mémoire (la normalisation n'est pas exprimable en SQL). Acceptable tant
-    // que la base reste de l'ordre du millier d'entreprises ; à revoir (colonne
-    // normalized_key indexée, remplie à l'écriture) si le volume grossit
-    // significativement.
-    const allCompanies = await db.select({ id: companies.id, name: companies.name }).from(companies);
-    const match = allCompanies.find((c) => normalizeCompanyKey(c.name) === companyKey);
+    // Charge le nom des entreprises DU MÊME ESPACE pour comparer les clés
+    // normalisées en mémoire (la normalisation n'est pas exprimable en SQL).
+    // Acceptable tant que chaque espace reste de l'ordre du millier
+    // d'entreprises ; à revoir (colonne normalized_key indexée, remplie à
+    // l'écriture) si le volume grossit significativement.
+    const workspaceCompanies = await db
+      .select({ id: companies.id, name: companies.name })
+      .from(companies)
+      .where(eq(companies.workspaceId, workspaceId));
+    const match = workspaceCompanies.find((c) => normalizeCompanyKey(c.name) === companyKey);
     if (match) matchedCompanyId = match.id;
   }
 
@@ -136,6 +147,7 @@ export async function ingestLead(payload: LeadPayload): Promise<IngestResult> {
       b2bB2c: payload.company.b2bB2c ?? null,
       linkedinUrl: cleanText(payload.company.linkedinUrl),
       sourceSystem: payload.company.sourceSystem ?? "api",
+      workspaceId,
     })
     .returning({ id: companies.id });
 
