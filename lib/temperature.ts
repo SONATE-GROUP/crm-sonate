@@ -4,8 +4,7 @@ import { revalidateTag } from "next/cache";
 
 import { db } from "@/db/client";
 import { contacts, conversationMessages, CONTACT_TEMPERATURE_VALUES, type ContactTemperature } from "@/db/schema";
-
-const client = new Anthropic();
+import { getAnyIntegrationSetting } from "@/lib/queries";
 
 const TEMPERATURE_SCHEMA = {
   type: "object",
@@ -35,6 +34,13 @@ export async function classifyConversationTemperature(
   messages: ConversationForClassification[]
 ): Promise<{ temperature: ContactTemperature; reason: string } | null> {
   if (messages.length === 0) return null;
+
+  const apiKey = await getAnyIntegrationSetting("anthropic");
+  if (!apiKey) {
+    console.warn("classifyConversationTemperature: clé API Anthropic non configurée (/settings)");
+    return null;
+  }
+  const client = new Anthropic({ apiKey });
 
   const transcript = messages
     .map((m) => `[${m.sentAt.toISOString()}] ${m.direction === "outbound" ? "Nous" : "Prospect"} (${m.channel}): ${m.body}`)
