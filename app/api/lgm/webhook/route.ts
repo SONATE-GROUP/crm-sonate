@@ -1,12 +1,14 @@
 import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
+import { after } from "next/server";
 import type { NextRequest } from "next/server";
 
 import { db } from "@/db/client";
 import { apiKeys, contacts, conversationMessages, type ConversationChannel, type ConversationDirection } from "@/db/schema";
 import { hashApiKey } from "@/lib/apiKeys";
 import { normalizeEmail, normalizeLinkedinUrl } from "@/lib/normalize";
+import { refreshContactTemperature } from "@/lib/temperature";
 
 const CHANNEL_MAP: Record<string, ConversationChannel> = {
   LINKEDIN: "linkedin",
@@ -98,13 +100,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "no_matching_contact" });
   }
 
+  let hasNewInboundMessage = false;
   for (const message of payload.messages) {
     const direction = DIRECTION_MAP[message.direction];
     if (!direction) {
       console.warn("lgm webhook: direction de message inconnue", message.direction);
       continue;
     }
-    await db
+    const inserted = await db
       .insert(conversationMessages)
       .values({
         contactId,
@@ -114,9 +117,20 @@ export async function POST(request: NextRequest) {
         sentAt: new Date(message.createdAt),
         externalId: message.id,
       })
-      .onConflictDoNothing({ target: conversationMessages.externalId });
+      .onConflictDoNothing({ target: conversationMessages.externalId })
+      .returning({ id: conversationMessages.id });
+    if (inserted.length > 0 && direction === "inbound") hasNewInboundMessage = true;
   }
 
   revalidateTag("crm-data", { expire: 0 });
+
+  // Analyse IA de la température de la conversation : uniquement sur un
+  // nouveau message reçu (pas sur les messages qu'on envoie nous-mêmes), et
+  // en arrière-plan pour ne jamais retarder la réponse au webhook (LGM exige
+  // < 3s et coupe le webhook après des échecs répétés).
+  if (hasNewInboundMessage) {
+    after(() => refreshContactTemperature(contactId!));
+  }
+
   return NextResponse.json({ ok: true, contactId });
 }

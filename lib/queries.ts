@@ -322,6 +322,7 @@ async function _listContacts(filters: ContactListFilters) {
         companyId: companies.id,
         companyName: companies.name,
         pendingCount: sql<number>`coalesce(${pendingCount.pendingN}, 0)`,
+        aiTemperature: contacts.aiTemperature,
       })
       .from(contacts)
       .innerJoin(companies, eq(contacts.companyId, companies.id))

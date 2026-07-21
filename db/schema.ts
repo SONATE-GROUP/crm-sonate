@@ -114,6 +114,17 @@ export const companies = sqliteTable("companies", {
     .default(sql`(unixepoch())`),
 });
 
+export const CONTACT_TEMPERATURE_VALUES = ["chaud", "froid", "rdv_pris", "perdu", "a_relancer"] as const;
+export type ContactTemperature = (typeof CONTACT_TEMPERATURE_VALUES)[number];
+
+export const CONTACT_TEMPERATURE_LABELS: Record<ContactTemperature, string> = {
+  chaud: "Chaud",
+  froid: "Froid",
+  rdv_pris: "RDV pris",
+  perdu: "Perdu",
+  a_relancer: "À relancer",
+};
+
 export const contacts = sqliteTable("contacts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   companyId: integer("company_id")
@@ -127,6 +138,15 @@ export const contacts = sqliteTable("contacts", {
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),
+  /**
+   * Température de la conversation calculée par IA à chaque nouveau message
+   * entrant (cf. lib/temperature.ts) — volontairement distincte du statut du
+   * deal (deals.status) pour ne jamais déplacer une carte du pipeline
+   * automatiquement ; c'est un signal complémentaire affiché en badge.
+   */
+  aiTemperature: text("ai_temperature", { enum: CONTACT_TEMPERATURE_VALUES }),
+  aiTemperatureReason: text("ai_temperature_reason"),
+  aiTemperatureUpdatedAt: integer("ai_temperature_updated_at", { mode: "timestamp" }),
 });
 
 export const deals = sqliteTable("deals", {
