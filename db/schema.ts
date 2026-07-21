@@ -198,7 +198,35 @@ export const apiKeys = sqliteTable("api_keys", {
   lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
 });
 
-export const INTEGRATION_PROVIDER_VALUES = ["derrick_app"] as const;
+export const CONVERSATION_CHANNEL_VALUES = ["linkedin", "email"] as const;
+export type ConversationChannel = (typeof CONVERSATION_CHANNEL_VALUES)[number];
+
+export const CONVERSATION_DIRECTION_VALUES = ["inbound", "outbound"] as const;
+export type ConversationDirection = (typeof CONVERSATION_DIRECTION_VALUES)[number];
+
+/**
+ * Messages de conversation avec un contact (LinkedIn, email…), remontés
+ * depuis un outil d'outreach externe (ex. LaGrowthMachine) — cf. lib/queries.ts
+ * getConversationsForContact. `externalId` sert de clé de dédoublonnage lors
+ * de la synchro (un message LGM ne doit jamais être importé deux fois).
+ */
+export const conversationMessages = sqliteTable("conversation_messages", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  contactId: integer("contact_id")
+    .notNull()
+    .references(() => contacts.id),
+  channel: text("channel", { enum: CONVERSATION_CHANNEL_VALUES }).notNull(),
+  direction: text("direction", { enum: CONVERSATION_DIRECTION_VALUES }).notNull(),
+  subject: text("subject"),
+  body: text("body").notNull(),
+  sentAt: integer("sent_at", { mode: "timestamp" }).notNull(),
+  externalId: text("external_id").unique(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
+export const INTEGRATION_PROVIDER_VALUES = ["derrick_app", "lagrowthmachine"] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDER_VALUES)[number];
 
 /** Identifiants d'intégrations tierces (ex. Derrick App), par utilisateur. */

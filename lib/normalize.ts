@@ -32,3 +32,19 @@ export function normalizeCompanyKey(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
 }
+
+/**
+ * lower/trim + retrait du slash final et des paramètres de requête, pour
+ * comparer une URL LinkedIn saisie à la main à celle renvoyée par une API
+ * tierce (LaGrowthMachine, Derrick App...) sans faux négatifs de dédoublonnage.
+ */
+export function normalizeLinkedinUrl(value: string | undefined | null): string | null {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return null;
+  return trimmed
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("?")[0]
+    .replace(/\/+$/, "");
+}

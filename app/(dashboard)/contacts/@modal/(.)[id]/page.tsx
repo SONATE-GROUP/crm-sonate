@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getContactDetail } from "@/lib/queries";
+import { getContactDetail, getConversationsForContact } from "@/lib/queries";
 import { Drawer } from "@/components/Drawer";
 import { DrawerSection, DrawerRow } from "@/components/DrawerSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EnrichmentPanel } from "@/components/EnrichmentPanel";
+import { ConversationThread } from "@/components/ConversationThread";
 import { getLatestRunsForEntity } from "@/lib/enrichment-runs";
 
 function formatDate(value: Date | null) {
@@ -25,7 +26,10 @@ export default async function ContactModal({
   if (!detail) notFound();
 
   const { contact, company, deals } = detail;
-  const enrichmentRuns = await getLatestRunsForEntity("contact", contact.id);
+  const [enrichmentRuns, conversations] = await Promise.all([
+    getLatestRunsForEntity("contact", contact.id),
+    getConversationsForContact(contact.id),
+  ]);
 
   return (
     <Drawer
@@ -47,6 +51,10 @@ export default async function ContactModal({
           }
         />
         <DrawerRow label="Créé le" value={formatDate(contact.createdAt)} />
+      </DrawerSection>
+
+      <DrawerSection title={`Conversations (${conversations.length})`}>
+        <ConversationThread messages={conversations} />
       </DrawerSection>
 
       <DrawerSection title="Enrichissement (Derrick App)">
