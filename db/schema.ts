@@ -161,6 +161,30 @@ export const appSecrets = sqliteTable("app_secrets", {
   value: text("value").notNull(),
 });
 
+export const INVITATION_STATUS_VALUES = ["pending", "accepted", "revoked"] as const;
+export type InvitationStatus = (typeof INVITATION_STATUS_VALUES)[number];
+
+/**
+ * Invitations par email : un admin invite un email (optionnellement direct
+ * dans un espace donné) ; l'invité clique le lien reçu (`/invite/[token]`),
+ * choisit son mot de passe, et son compte est créé à la volée — cf.
+ * lib/invitations-actions.ts.
+ */
+export const userInvitations = sqliteTable("user_invitations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  email: text("email").notNull(),
+  workspaceId: integer("workspace_id").references(() => workspaces.id, { onDelete: "set null" }),
+  workspaceRole: text("workspace_role", { enum: WORKSPACE_MEMBER_ROLE_VALUES }).notNull().default("reader"),
+  token: text("token").notNull().unique(),
+  status: text("status", { enum: INVITATION_STATUS_VALUES }).notNull().default("pending"),
+  invitedByEmail: text("invited_by_email").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  acceptedAt: integer("accepted_at", { mode: "timestamp" }),
+});
+
 export const companies = sqliteTable("companies", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
@@ -315,7 +339,7 @@ export const conversationMessages = sqliteTable("conversation_messages", {
     .default(sql`(unixepoch())`),
 });
 
-export const INTEGRATION_PROVIDER_VALUES = ["derrick_app", "lagrowthmachine", "anthropic"] as const;
+export const INTEGRATION_PROVIDER_VALUES = ["derrick_app", "lagrowthmachine", "anthropic", "resend"] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDER_VALUES)[number];
 
 /** Identifiants d'intégrations tierces (ex. Derrick App), par utilisateur. */

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { InvitationManager } from "@/components/InvitationManager";
 import { PageHeader } from "@/components/PageHeader";
 import { UserManager } from "@/components/UserManager";
-import { listUsers } from "@/lib/queries";
+import { listInvitations, listUsers, listWorkspaces } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/session";
 
 export default async function UsersSettingsPage() {
@@ -11,7 +12,7 @@ export default async function UsersSettingsPage() {
   if (!user) redirect("/login");
   if (!user.isAdmin) redirect("/settings");
 
-  const users = await listUsers();
+  const [users, invitations, workspaces] = await Promise.all([listUsers(), listInvitations(), listWorkspaces()]);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -23,6 +24,17 @@ export default async function UsersSettingsPage() {
         Un admin a accès à tous les espaces. Un utilisateur normal ne voit que les entreprises rattachées aux espaces
         dont il est membre (cf. Espaces).
       </p>
+
+      <h2 className="mb-3 text-lg font-bold text-sonate-green">Inviter un utilisateur par email</h2>
+      <p className="mb-4 text-sm text-sonate-muted">
+        Un email est envoyé (via Resend, cf. Paramètres) avec un lien pour que la personne active son compte
+        elle-même et choisisse son mot de passe.
+      </p>
+      <div className="mb-10">
+        <InvitationManager initialInvitations={invitations} workspaces={workspaces} />
+      </div>
+
+      <h2 className="mb-3 text-lg font-bold text-sonate-green">Créer un compte directement</h2>
       <UserManager initialUsers={users} currentUserId={user.id} />
     </div>
   );

@@ -15,7 +15,8 @@ export async function proxy(request: NextRequest) {
 // /api/* est exclu de cette auth par cookie : ces routes vérifient leur
 // propre clé API (cf. app/api/leads/route.ts), destinées à des appels
 // machine (Make/n8n), pas à un navigateur. /login est exclu pour éviter une
-// boucle de redirection infinie.
+// boucle de redirection infinie. /invite/* est exclu : un invité qui clique
+// le lien reçu par email n'a pas encore de session.
 export const config = {
-  matcher: ["/((?!api|login|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api|login|invite|_next/static|_next/image|favicon.ico).*)"],
 };

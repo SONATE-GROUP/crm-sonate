@@ -10,12 +10,14 @@ import {
   deals,
   integrationSettings,
   pendingLeads,
+  userInvitations,
   users,
   workspaceMembers,
   workspaces,
   type DealStatus,
   type B2bB2c,
   type IntegrationProvider,
+  type InvitationStatus,
   type SourceSystem,
 } from "@/db/schema";
 
@@ -575,6 +577,38 @@ export async function listUsers() {
 export async function getUserByEmail(email: string) {
   const [row] = await db.select().from(users).where(eq(users.email, email)).limit(1);
   return row ?? null;
+}
+
+// "isExpired" est calculé ici (fonction serveur normale) plutôt que dans un
+// composant React, où appeler Date.now() casserait la règle de pureté du
+// rendu (react-hooks/purity).
+function isInvitationExpired(status: InvitationStatus, expiresAt: Date): boolean {
+  return status === "pending" && expiresAt.getTime() < Date.now();
+}
+
+export async function getInvitationByToken(token: string) {
+  const [row] = await db.select().from(userInvitations).where(eq(userInvitations.token, token)).limit(1);
+  if (!row) return null;
+  return { ...row, isExpired: isInvitationExpired(row.status, row.expiresAt) };
+}
+
+export async function listInvitations() {
+  const rows = await db
+    .select({
+      id: userInvitations.id,
+      email: userInvitations.email,
+      status: userInvitations.status,
+      workspaceId: userInvitations.workspaceId,
+      workspaceName: workspaces.name,
+      workspaceRole: userInvitations.workspaceRole,
+      createdAt: userInvitations.createdAt,
+      expiresAt: userInvitations.expiresAt,
+      acceptedAt: userInvitations.acceptedAt,
+    })
+    .from(userInvitations)
+    .leftJoin(workspaces, eq(workspaces.id, userInvitations.workspaceId))
+    .orderBy(desc(userInvitations.createdAt));
+  return rows.map((row) => ({ ...row, isExpired: isInvitationExpired(row.status, row.expiresAt) }));
 }
 
 export async function listWorkspaces() {
