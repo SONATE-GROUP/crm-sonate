@@ -1,14 +1,17 @@
 import Link from "next/link";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, ShieldCheck, UserCog } from "lucide-react";
 
 import { NavLinks } from "@/components/NavLinks";
 import { logout } from "@/lib/auth-actions";
+import { getCurrentUser } from "@/lib/session";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const user = await getCurrentUser();
+
   return (
     <div className="flex min-h-full">
       <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col overflow-y-auto bg-sonate-green text-sonate-cream">
@@ -21,6 +24,27 @@ export default function DashboardLayout({
         </div>
         <NavLinks />
         <div className="mt-auto px-3 pb-6">
+          {user?.isAdmin && (
+            <>
+              <div className="px-3 pb-2 pt-4 text-[11px] font-semibold uppercase tracking-wide text-sonate-cream/40">
+                Administration
+              </div>
+              <Link
+                href="/settings/users"
+                className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-sonate-cream/70 hover:bg-sonate-cream/10 hover:text-sonate-cream"
+              >
+                <UserCog size={17} strokeWidth={2} />
+                Utilisateurs
+              </Link>
+              <Link
+                href="/settings/workspaces"
+                className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-sonate-cream/70 hover:bg-sonate-cream/10 hover:text-sonate-cream"
+              >
+                <ShieldCheck size={17} strokeWidth={2} />
+                Espaces clients
+              </Link>
+            </>
+          )}
           <Link
             href="/settings"
             className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-sonate-cream/70 hover:bg-sonate-cream/10 hover:text-sonate-cream"
