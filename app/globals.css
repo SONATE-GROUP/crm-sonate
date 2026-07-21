@@ -33,18 +33,25 @@ body {
 }
 
 /*
- * Les navigateurs repeignent les champs auto-remplis (mot de passe
- * enregistré, autofill) avec leurs propres couleurs de fond/texte, en
- * ignorant nos classes Tailwind — ce qui peut rendre le texte saisi
- * quasi invisible. On force nos propres couleurs par-dessus.
+ * Les navigateurs (et certaines extensions de gestion de mots de passe,
+ * ex. NordPass) repeignent les champs auto-remplis avec leurs propres
+ * couleurs de fond/texte, en ignorant nos classes Tailwind — ce qui peut
+ * rendre le texte saisi quasi invisible. On force nos propres couleurs
+ * par-dessus avec !important : une extension qui écrirait elle-même du
+ * style inline en !important resterait hors de portée du CSS du site
+ * (aucune page ne peut s'en prémunir), mais ça couvre l'autofill natif du
+ * navigateur et la plupart des extensions.
  */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
-input:-webkit-autofill:active {
-  -webkit-text-fill-color: var(--color-sonate-green);
-  box-shadow: 0 0 0px 1000px white inset;
-  -webkit-box-shadow: 0 0 0px 1000px white inset;
+input:-webkit-autofill:active,
+input:autofill {
+  background-color: white !important;
+  color: var(--color-sonate-green) !important;
+  -webkit-text-fill-color: var(--color-sonate-green) !important;
+  box-shadow: 0 0 0px 1000px white inset !important;
+  -webkit-box-shadow: 0 0 0px 1000px white inset !important;
   transition: background-color 9999s ease-in-out 0s;
 }
 
