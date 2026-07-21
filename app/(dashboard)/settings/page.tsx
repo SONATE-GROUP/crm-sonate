@@ -11,10 +11,11 @@ export default async function SettingsPage() {
   const email = await getCurrentUserEmail();
   if (!email) redirect("/login");
 
-  const [keys, derrickSetting, lgmSetting] = await Promise.all([
+  const [keys, derrickSetting, lgmSetting, anthropicSetting] = await Promise.all([
     listApiKeysForOwner(email),
     getIntegrationSettingForOwner(email, "derrick_app"),
     getIntegrationSettingForOwner(email, "lagrowthmachine"),
+    getIntegrationSettingForOwner(email, "anthropic"),
   ]);
 
   const hdrs = await headers();
@@ -78,6 +79,19 @@ export default async function SettingsPage() {
         <code className="block break-all rounded-lg bg-sonate-green/5 px-3 py-2 text-sm text-sonate-green">
           {lgmWebhookUrl}?key=VOTRE_CLE_API
         </code>
+      </section>
+
+      <section className="mt-10">
+        <h2 className="mb-1 text-lg font-bold text-sonate-green">Anthropic (Claude)</h2>
+        <p className="mb-4 text-sm text-sonate-muted">
+          Clé API Anthropic (console.anthropic.com → API Keys), utilisée pour l&apos;analyse de température des
+          conversations. Sans cette clé, l&apos;analyse est simplement ignorée.
+        </p>
+        <IntegrationSettingForm
+          provider="anthropic"
+          configured={anthropicSetting !== null}
+          updatedAt={anthropicSetting?.updatedAt ?? null}
+        />
       </section>
     </div>
   );
