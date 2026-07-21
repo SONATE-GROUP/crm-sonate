@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { ContactRow } from "@/lib/queries";
 import { PendingBadge } from "@/components/PendingBadge";
 import { BulkEnrichBar } from "@/components/BulkEnrichBar";
+import { TemperatureBadge } from "@/components/TemperatureBadge";
 
 export function ContactsTable({ rows }: { rows: ContactRow[] }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -42,6 +43,7 @@ export function ContactsTable({ rows }: { rows: ContactRow[] }) {
               <th className="px-4 py-3">Téléphone</th>
               <th className="px-4 py-3">Rôle</th>
               <th className="px-4 py-3">Entreprise</th>
+              <th className="px-4 py-3">Température</th>
             </tr>
           </thead>
           <tbody>
@@ -69,11 +71,14 @@ export function ContactsTable({ rows }: { rows: ContactRow[] }) {
                     {row.companyName}
                   </Link>
                 </td>
+                <td className="px-4 py-3">
+                  <TemperatureBadge temperature={row.aiTemperature} />
+                </td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sonate-muted">
+                <td colSpan={7} className="px-4 py-8 text-center text-sonate-muted">
                   Aucun résultat pour cette recherche.
                 </td>
               </tr>

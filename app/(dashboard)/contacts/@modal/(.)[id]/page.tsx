@@ -7,6 +7,7 @@ import { DrawerSection, DrawerRow } from "@/components/DrawerSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EnrichmentPanel } from "@/components/EnrichmentPanel";
 import { ConversationThread } from "@/components/ConversationThread";
+import { TemperatureBadge } from "@/components/TemperatureBadge";
 import { getLatestRunsForEntity } from "@/lib/enrichment-runs";
 
 function formatDate(value: Date | null) {
@@ -37,6 +38,12 @@ export default async function ContactModal({
       subtitle={[contact.role, company?.name].filter(Boolean).join(" · ") || undefined}
     >
       <DrawerSection title="Contact">
+        {contact.aiTemperature && (
+          <DrawerRow
+            label="Température"
+            value={<TemperatureBadge temperature={contact.aiTemperature} reason={contact.aiTemperatureReason} />}
+          />
+        )}
         <DrawerRow label="Email" value={contact.email} />
         <DrawerRow label="Téléphone" value={contact.phone} />
         <DrawerRow label="Rôle" value={contact.role} />

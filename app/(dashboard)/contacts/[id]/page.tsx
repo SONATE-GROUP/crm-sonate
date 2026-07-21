@@ -6,6 +6,7 @@ import { Field, Section } from "@/components/DetailSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EnrichmentPanel } from "@/components/EnrichmentPanel";
 import { ConversationThread } from "@/components/ConversationThread";
+import { TemperatureBadge } from "@/components/TemperatureBadge";
 import { getLatestRunsForEntity } from "@/lib/enrichment-runs";
 
 function formatDate(value: Date | null) {
@@ -36,7 +37,10 @@ export default async function ContactDetailPage({
         ← Retour à la liste des contacts
       </Link>
 
-      <h1 className="mt-2 mb-6 text-2xl font-extrabold tracking-tight">{contact.fullName}</h1>
+      <h1 className="mt-2 mb-6 flex items-center gap-3 text-2xl font-extrabold tracking-tight">
+        {contact.fullName}
+        <TemperatureBadge temperature={contact.aiTemperature} reason={contact.aiTemperatureReason} />
+      </h1>
 
       <Section title="Contact">
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
