@@ -339,7 +339,7 @@ export const conversationMessages = sqliteTable("conversation_messages", {
     .default(sql`(unixepoch())`),
 });
 
-export const INTEGRATION_PROVIDER_VALUES = ["derrick_app", "lagrowthmachine", "anthropic", "resend"] as const;
+export const INTEGRATION_PROVIDER_VALUES = ["derrick_app", "lagrowthmachine", "anthropic", "resend", "google_oauth"] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDER_VALUES)[number];
 
 /** Identifiants d'intégrations tierces (ex. Derrick App), par utilisateur. */
