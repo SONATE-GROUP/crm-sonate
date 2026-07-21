@@ -11,15 +11,18 @@ export default async function SettingsPage() {
   const email = await getCurrentUserEmail();
   if (!email) redirect("/login");
 
-  const [keys, derrickSetting] = await Promise.all([
+  const [keys, derrickSetting, lgmSetting] = await Promise.all([
     listApiKeysForOwner(email),
     getIntegrationSettingForOwner(email, "derrick_app"),
+    getIntegrationSettingForOwner(email, "lagrowthmachine"),
   ]);
 
   const hdrs = await headers();
   const host = hdrs.get("host");
   const isLocal = host?.startsWith("localhost") || host?.startsWith("127.");
-  const webhookUrl = host ? `${isLocal ? "http" : "https"}://${host}/api/leads` : "/api/leads";
+  const origin = host ? `${isLocal ? "http" : "https"}://${host}` : "";
+  const webhookUrl = origin ? `${origin}/api/leads` : "/api/leads";
+  const lgmWebhookUrl = origin ? `${origin}/api/lgm/webhook` : "/api/lgm/webhook";
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -53,6 +56,28 @@ export default async function SettingsPage() {
           configured={derrickSetting !== null}
           updatedAt={derrickSetting?.updatedAt ?? null}
         />
+      </section>
+
+      <section className="mt-10">
+        <h2 className="mb-1 text-lg font-bold text-sonate-green">LaGrowthMachine</h2>
+        <p className="mb-4 text-sm text-sonate-muted">
+          Clé API LaGrowthMachine (Réglages → API dans LGM), utilisée pour les futurs appels de synchro (import
+          d&apos;historique de conversations).
+        </p>
+        <IntegrationSettingForm
+          provider="lagrowthmachine"
+          configured={lgmSetting !== null}
+          updatedAt={lgmSetting?.updatedAt ?? null}
+        />
+        <p className="mt-5 mb-1 text-sm font-semibold text-sonate-green">Webhook inbox (messages en temps réel)</p>
+        <p className="mb-2 text-sm text-sonate-muted">
+          Dans LGM, crée un &quot;Inbox Event Webhook&quot; (via l&apos;API <code>POST /flow/inboxWebhooks</code>,
+          type <code>INBOX_MESSAGE</code>) pointant vers l&apos;URL ci-dessous, avec <code>?key=</code> suivi d&apos;une
+          des clés API générées plus haut sur cette page.
+        </p>
+        <code className="block break-all rounded-lg bg-sonate-green/5 px-3 py-2 text-sm text-sonate-green">
+          {lgmWebhookUrl}?key=VOTRE_CLE_API
+        </code>
       </section>
     </div>
   );
