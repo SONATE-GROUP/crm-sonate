@@ -11,15 +11,26 @@ type ApiKeyRow = {
   keyPreview: string;
   createdAt: Date;
   lastUsedAt: Date | null;
+  workspaceId: number | null;
+  workspaceName: string | null;
 };
+
+type WorkspaceOption = { id: number; name: string };
 
 function formatDate(value: Date | null) {
   return value ? new Date(value).toLocaleDateString("fr-FR") : "—";
 }
 
-export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyRow[] }) {
+export function ApiKeyManager({
+  initialKeys,
+  workspaces,
+}: {
+  initialKeys: ApiKeyRow[];
+  workspaces: WorkspaceOption[];
+}) {
   const [keys, setKeys] = useState(initialKeys);
   const [label, setLabel] = useState("");
+  const [workspaceId, setWorkspaceId] = useState(String(workspaces[0]?.id ?? ""));
   const [newPlaintext, setNewPlaintext] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -27,14 +38,27 @@ export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyRow[] }) {
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!workspaceId) {
+      setError("Choisis l'espace dans lequel cette clé fera atterrir ses leads.");
+      return;
+    }
     startTransition(async () => {
-      const result = await createApiKey(label);
+      const result = await createApiKey(label, Number(workspaceId));
       if ("error" in result) {
         setError(result.error);
         return;
       }
+      const targetWorkspace = workspaces.find((w) => w.id === result.workspaceId);
       setKeys((prev) => [
-        { id: result.id, label: result.label, keyPreview: result.keyPreview, createdAt: result.createdAt, lastUsedAt: null },
+        {
+          id: result.id,
+          label: result.label,
+          keyPreview: result.keyPreview,
+          createdAt: result.createdAt,
+          lastUsedAt: null,
+          workspaceId: result.workspaceId,
+          workspaceName: targetWorkspace?.name ?? null,
+        },
         ...prev,
       ]);
       setNewPlaintext(result.plaintext);
@@ -80,9 +104,20 @@ export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyRow[] }) {
             className={fieldClass}
           />
         </div>
+        <div>
+          <label className={labelClass}>Espace</label>
+          <select value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)} className={fieldClass}>
+            {workspaces.length === 0 && <option value="">Aucun espace disponible</option>}
+            {workspaces.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
+            ))}
+          </select>
+        </div>
         <button
           type="submit"
-          disabled={isPending || !label.trim()}
+          disabled={isPending || !label.trim() || workspaces.length === 0}
           className="rounded-full bg-sonate-orange px-5 py-2 text-sm font-semibold text-sonate-cream transition-colors hover:bg-sonate-orange-dark disabled:opacity-50"
         >
           Créer
@@ -95,6 +130,7 @@ export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyRow[] }) {
           <thead className="border-b border-sonate-green/10 bg-sonate-green/5 text-xs font-semibold uppercase tracking-wide text-sonate-muted">
             <tr>
               <th className="px-4 py-3">Nom</th>
+              <th className="px-4 py-3">Espace</th>
               <th className="px-4 py-3">Clé</th>
               <th className="px-4 py-3">Créée le</th>
               <th className="px-4 py-3">Dernière utilisation</th>
@@ -105,6 +141,9 @@ export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyRow[] }) {
             {keys.map((k) => (
               <tr key={k.id} className="border-b border-sonate-green/5 last:border-0">
                 <td className="px-4 py-3 font-medium">{k.label}</td>
+                <td className="px-4 py-3 text-sonate-muted">
+                  {k.workspaceName ?? <span className="font-semibold text-sonate-red">Aucun (ancienne clé)</span>}
+                </td>
                 <td className="px-4 py-3 font-mono text-xs text-sonate-muted">••••{k.keyPreview}</td>
                 <td className="px-4 py-3 text-sonate-muted">{formatDate(k.createdAt)}</td>
                 <td className="px-4 py-3 text-sonate-muted">{formatDate(k.lastUsedAt)}</td>
@@ -121,7 +160,7 @@ export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyRow[] }) {
             ))}
             {keys.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-sonate-muted">
+                <td colSpan={6} className="px-4 py-8 text-center text-sonate-muted">
                   Aucune clé pour le moment.
                 </td>
               </tr>

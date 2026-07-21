@@ -527,10 +527,26 @@ export async function listApiKeysForOwner(ownerEmail: string) {
       keyPreview: apiKeys.keyPreview,
       createdAt: apiKeys.createdAt,
       lastUsedAt: apiKeys.lastUsedAt,
+      workspaceId: apiKeys.workspaceId,
+      workspaceName: workspaces.name,
     })
     .from(apiKeys)
+    .leftJoin(workspaces, eq(workspaces.id, apiKeys.workspaceId))
     .where(eq(apiKeys.ownerEmail, ownerEmail))
     .orderBy(desc(apiKeys.createdAt));
+}
+
+/** Espaces auxquels l'utilisateur a accès (tous si admin, ses memberships sinon) — pour les sélecteurs d'espace côté UI. */
+export async function listWorkspacesForScope(scope: Scope) {
+  if (scope.isAdmin) {
+    return db.select({ id: workspaces.id, name: workspaces.name }).from(workspaces).orderBy(asc(workspaces.name));
+  }
+  if (scope.workspaceIds.length === 0) return [];
+  return db
+    .select({ id: workspaces.id, name: workspaces.name })
+    .from(workspaces)
+    .where(inArray(workspaces.id, scope.workspaceIds))
+    .orderBy(asc(workspaces.name));
 }
 
 export async function getIntegrationSettingForOwner(ownerEmail: string, provider: IntegrationProvider) {

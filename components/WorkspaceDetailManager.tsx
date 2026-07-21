@@ -4,7 +4,13 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
 
 import type { WorkspaceMemberRole } from "@/db/schema";
-import { addWorkspaceMember, assignCompanyWorkspace, removeWorkspaceMember, renameWorkspace } from "@/lib/workspaces-actions";
+import {
+  addWorkspaceMember,
+  assignCompanyWorkspace,
+  bulkAssignUnassignedToWorkspace,
+  removeWorkspaceMember,
+  renameWorkspace,
+} from "@/lib/workspaces-actions";
 import { fieldClass, labelClass } from "@/lib/ui";
 
 type Member = { membershipId: number; role: WorkspaceMemberRole; userId: number; email: string; fullName: string };
@@ -27,6 +33,7 @@ export function WorkspaceDetailManager({
   const [memberError, setMemberError] = useState<string | null>(null);
   const [companyError, setCompanyError] = useState<string | null>(null);
   const [companyFilter, setCompanyFilter] = useState("");
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const memberFormRef = useRef<HTMLFormElement>(null);
 
@@ -78,6 +85,22 @@ export function WorkspaceDetailManager({
         setCompanyError(result.error);
         return;
       }
+      router.refresh();
+    });
+  }
+
+  function handleBulkAssign() {
+    if (
+      !window.confirm(
+        "Rattacher définitivement à cet espace TOUTES les entreprises (et clés API) qui n'ont pas encore d'espace ? Cette action est irréversible."
+      )
+    ) {
+      return;
+    }
+    setBulkResult(null);
+    startTransition(async () => {
+      const result = await bulkAssignUnassignedToWorkspace(workspaceId);
+      setBulkResult(`${result.companiesAssigned} entreprise(s) et ${result.keysAssigned} clé(s) API rattachées.`);
       router.refresh();
     });
   }
@@ -187,6 +210,17 @@ export function WorkspaceDetailManager({
           Rattachement définitif : une entreprise ne peut pas être transférée vers un autre espace (cloisonnement des
           données clients).
         </p>
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={handleBulkAssign}
+            disabled={isPending}
+            className="rounded-full border border-sonate-orange/40 px-4 py-1.5 text-xs font-semibold text-sonate-orange hover:bg-sonate-orange/5 disabled:opacity-50"
+          >
+            Rattacher ici toutes les entreprises (et clés API) sans espace
+          </button>
+          {bulkResult && <p className="mt-2 text-xs text-sonate-muted">{bulkResult}</p>}
+        </div>
         <div className="mb-6 overflow-x-auto rounded-2xl border border-sonate-green/10 bg-white">
           <table className="w-full text-left text-sm">
             <tbody>

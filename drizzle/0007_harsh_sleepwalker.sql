@@ -1,0 +1,1 @@
+ALTER TABLE `api_keys` ADD `workspace_id` integer REFERENCES workspaces(id);

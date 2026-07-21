@@ -17,8 +17,9 @@ import { triggerEnrichment } from "@/lib/enrichment";
  *
  * Authentification par clé API (indépendante de l'auth humaine de proxy.ts) :
  * header "x-api-key" ou "Authorization: Bearer <clé>", vérifiée contre les
- * clés générées par chaque utilisateur depuis /settings (table api_keys) —
- * n'importe quelle clé valide de n'importe quel utilisateur autorise l'appel.
+ * clés générées par chaque utilisateur depuis /settings (table api_keys).
+ * Chaque clé est rattachée à un espace : les leads qu'elle ingère y sont
+ * systématiquement créés (jamais d'entreprise hors espace).
  */
 export async function POST(request: NextRequest) {
   const providedKey =
@@ -29,13 +30,19 @@ export async function POST(request: NextRequest) {
   }
 
   const [matchedKey] = await db
-    .select({ id: apiKeys.id })
+    .select({ id: apiKeys.id, workspaceId: apiKeys.workspaceId })
     .from(apiKeys)
     .where(eq(apiKeys.keyHash, hashApiKey(providedKey)))
     .limit(1);
 
   if (!matchedKey) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (!matchedKey.workspaceId) {
+    return NextResponse.json(
+      { error: "no_workspace", message: "Cette clé n'a pas d'espace rattaché — configure-le depuis /settings." },
+      { status: 409 }
+    );
   }
   await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, matchedKey.id));
 
@@ -47,7 +54,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await ingestLead(payload);
+    const result = await ingestLead(payload, matchedKey.workspaceId);
     if (result.outcome === "created") {
       after(() => triggerEnrichment(result.companyId));
     }

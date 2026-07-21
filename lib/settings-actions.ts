@@ -6,27 +6,36 @@ import { updateTag } from "next/cache";
 import { db } from "@/db/client";
 import { apiKeys, integrationSettings, type IntegrationProvider } from "@/db/schema";
 import { generateApiKey } from "@/lib/apiKeys";
-import { getCurrentUserEmail } from "@/lib/session";
+import { getCurrentUser, getCurrentUserEmail } from "@/lib/session";
 
 export type CreateApiKeyResult =
-  | { plaintext: string; id: number; label: string; keyPreview: string; createdAt: Date }
+  | { plaintext: string; id: number; label: string; keyPreview: string; createdAt: Date; workspaceId: number }
   | { error: string };
 
-/** Crée une nouvelle clé API d'ingestion pour l'utilisateur connecté — la valeur en clair n'est retournée qu'une fois. */
-export async function createApiKey(label: string): Promise<CreateApiKeyResult> {
-  const owner = await getCurrentUserEmail();
-  if (!owner) return { error: "Non authentifié." };
+/**
+ * Crée une nouvelle clé API d'ingestion pour l'utilisateur connecté — la
+ * valeur en clair n'est retournée qu'une fois. `workspaceId` est obligatoire :
+ * chaque clé fait atterrir ses leads dans un espace précis, jamais hors
+ * espace (cf. lib/ingest.ts). Un utilisateur ne peut choisir qu'un espace
+ * dont il est membre (un admin peut choisir n'importe lequel).
+ */
+export async function createApiKey(label: string, workspaceId: number): Promise<CreateApiKeyResult> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Non authentifié." };
 
   const cleanLabel = label.trim();
   if (!cleanLabel) return { error: "Un nom est requis (ex: \"Make - import Deuxio\")." };
+  if (!user.isAdmin && !user.workspaceIds.includes(workspaceId)) {
+    return { error: "Tu n'as pas accès à cet espace." };
+  }
 
   const { plaintext, hash, preview } = generateApiKey();
   const [inserted] = await db
     .insert(apiKeys)
-    .values({ ownerEmail: owner, label: cleanLabel, keyHash: hash, keyPreview: preview })
+    .values({ ownerEmail: user.email, label: cleanLabel, keyHash: hash, keyPreview: preview, workspaceId })
     .returning({ id: apiKeys.id, createdAt: apiKeys.createdAt });
   updateTag("crm-settings");
-  return { plaintext, id: inserted.id, label: cleanLabel, keyPreview: preview, createdAt: inserted.createdAt };
+  return { plaintext, id: inserted.id, label: cleanLabel, keyPreview: preview, createdAt: inserted.createdAt, workspaceId };
 }
 
 /** Révoque une clé — seul son propriétaire peut la supprimer. */
