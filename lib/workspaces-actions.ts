@@ -66,8 +66,23 @@ export async function removeWorkspaceMember(workspaceId: number, membershipId: n
   revalidatePath(`/settings/workspaces/${workspaceId}`);
 }
 
-export async function assignCompanyWorkspace(companyId: number, workspaceId: number | null) {
+/**
+ * Rattache une entreprise à un espace — définitivement. Comme HubSpot (business
+ * units), une entreprise déjà rattachée à un espace ne peut jamais en changer :
+ * pas de transfert entre espaces, pour garantir l'étanchéité des données entre
+ * clients (RGPD). Seule une entreprise pas encore rattachée (workspaceId null)
+ * peut recevoir un premier rattachement ; la suppression de l'espace lui-même
+ * (deleteWorkspace) est le seul cas qui remet workspaceId à null.
+ */
+export async function assignCompanyWorkspace(companyId: number, workspaceId: number): Promise<WorkspaceFormState> {
   await requireAdmin();
+
+  const [company] = await db.select({ workspaceId: companies.workspaceId }).from(companies).where(eq(companies.id, companyId)).limit(1);
+  if (!company) return { error: "Entreprise introuvable." };
+  if (company.workspaceId !== null) {
+    return { error: "Cette entreprise appartient déjà à un espace : aucun transfert entre espaces n'est autorisé." };
+  }
+
   await db.update(companies).set({ workspaceId }).where(eq(companies.id, companyId));
   revalidatePath("/settings/workspaces");
   revalidateTag("crm-data", { expire: 0 });

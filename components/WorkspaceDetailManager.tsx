@@ -25,17 +25,21 @@ export function WorkspaceDetailManager({
   const [name, setName] = useState(workspaceName);
   const [members, setMembers] = useState(initialMembers);
   const [memberError, setMemberError] = useState<string | null>(null);
+  const [companyError, setCompanyError] = useState<string | null>(null);
   const [companyFilter, setCompanyFilter] = useState("");
   const [isPending, startTransition] = useTransition();
   const memberFormRef = useRef<HTMLFormElement>(null);
 
   const inWorkspace = useMemo(() => allCompanies.filter((c) => c.workspaceId === workspaceId), [allCompanies, workspaceId]);
+  // Uniquement les entreprises pas encore rattachées à un espace — jamais
+  // celles d'un autre espace : pas de transfert possible entre espaces
+  // (cloisonnement RGPD des données clients, comme les business units HubSpot).
   const available = useMemo(
     () =>
       allCompanies
-        .filter((c) => c.workspaceId !== workspaceId)
+        .filter((c) => c.workspaceId === null)
         .filter((c) => c.name.toLowerCase().includes(companyFilter.toLowerCase())),
-    [allCompanies, workspaceId, companyFilter]
+    [allCompanies, companyFilter]
   );
 
   function handleRename(formData: FormData) {
@@ -66,9 +70,14 @@ export function WorkspaceDetailManager({
     });
   }
 
-  function handleAssign(companyId: number, targetWorkspaceId: number | null) {
+  function handleAssign(companyId: number) {
+    setCompanyError(null);
     startTransition(async () => {
-      await assignCompanyWorkspace(companyId, targetWorkspaceId);
+      const result = await assignCompanyWorkspace(companyId, workspaceId);
+      if (result?.error) {
+        setCompanyError(result.error);
+        return;
+      }
       router.refresh();
     });
   }
@@ -174,35 +183,28 @@ export function WorkspaceDetailManager({
 
       <section>
         <h2 className="mb-3 text-lg font-bold text-sonate-green">Entreprises dans cet espace ({inWorkspace.length})</h2>
+        <p className="mb-3 text-sm text-sonate-muted">
+          Rattachement définitif : une entreprise ne peut pas être transférée vers un autre espace (cloisonnement des
+          données clients).
+        </p>
         <div className="mb-6 overflow-x-auto rounded-2xl border border-sonate-green/10 bg-white">
           <table className="w-full text-left text-sm">
             <tbody>
               {inWorkspace.map((c) => (
                 <tr key={c.id} className="border-b border-sonate-green/5 last:border-0">
                   <td className="px-4 py-3 font-medium">{c.name}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => handleAssign(c.id, null)}
-                      className="text-xs font-semibold text-sonate-red hover:underline"
-                    >
-                      Retirer de l&apos;espace
-                    </button>
-                  </td>
                 </tr>
               ))}
               {inWorkspace.length === 0 && (
                 <tr>
-                  <td colSpan={2} className="px-4 py-8 text-center text-sonate-muted">
-                    Aucune entreprise dans cet espace.
-                  </td>
+                  <td className="px-4 py-8 text-center text-sonate-muted">Aucune entreprise dans cet espace.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
 
-        <h3 className="mb-2 text-sm font-semibold text-sonate-green">Ajouter une entreprise</h3>
+        <h3 className="mb-2 text-sm font-semibold text-sonate-green">Rattacher une entreprise sans espace</h3>
         <input
           type="text"
           value={companyFilter}
@@ -210,6 +212,7 @@ export function WorkspaceDetailManager({
           placeholder="Rechercher une entreprise…"
           className={`${fieldClass} mb-3 max-w-sm`}
         />
+        {companyError && <p className="mb-3 text-sm font-medium text-sonate-red">{companyError}</p>}
         <div className="max-h-64 overflow-y-auto overflow-x-auto rounded-2xl border border-sonate-green/10 bg-white">
           <table className="w-full text-left text-sm">
             <tbody>
@@ -219,10 +222,10 @@ export function WorkspaceDetailManager({
                   <td className="px-4 py-3 text-right">
                     <button
                       type="button"
-                      onClick={() => handleAssign(c.id, workspaceId)}
+                      onClick={() => handleAssign(c.id)}
                       className="text-xs font-semibold text-sonate-orange hover:underline"
                     >
-                      Ajouter
+                      Rattacher
                     </button>
                   </td>
                 </tr>
@@ -230,7 +233,7 @@ export function WorkspaceDetailManager({
               {available.length === 0 && (
                 <tr>
                   <td colSpan={2} className="px-4 py-8 text-center text-sonate-muted">
-                    Aucune entreprise correspondante.
+                    Aucune entreprise sans espace correspondante.
                   </td>
                 </tr>
               )}
