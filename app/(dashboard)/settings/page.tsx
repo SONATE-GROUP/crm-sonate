@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { ApiKeyManager } from "@/components/ApiKeyManager";
+import { GoogleOAuthSettingForm } from "@/components/GoogleOAuthSettingForm";
 import { IntegrationSettingForm } from "@/components/IntegrationSettingForm";
 import { PageHeader } from "@/components/PageHeader";
 import { getIntegrationSettingForOwner, listApiKeysForOwner, listWorkspacesForScope } from "@/lib/queries";
@@ -13,12 +14,13 @@ export default async function SettingsPage() {
   const email = user.email;
   const scope = { isAdmin: user.isAdmin, workspaceIds: user.workspaceIds };
 
-  const [keys, derrickSetting, lgmSetting, anthropicSetting, resendSetting, workspaces] = await Promise.all([
+  const [keys, derrickSetting, lgmSetting, anthropicSetting, resendSetting, googleSetting, workspaces] = await Promise.all([
     listApiKeysForOwner(email),
     getIntegrationSettingForOwner(email, "derrick_app"),
     getIntegrationSettingForOwner(email, "lagrowthmachine"),
     getIntegrationSettingForOwner(email, "anthropic"),
     getIntegrationSettingForOwner(email, "resend"),
+    getIntegrationSettingForOwner(email, "google_oauth"),
     listWorkspacesForScope(scope),
   ]);
 
@@ -28,6 +30,7 @@ export default async function SettingsPage() {
   const origin = host ? `${isLocal ? "http" : "https"}://${host}` : "";
   const webhookUrl = origin ? `${origin}/api/leads` : "/api/leads";
   const lgmWebhookUrl = origin ? `${origin}/api/lgm/webhook` : "/api/lgm/webhook";
+  const googleRedirectUri = origin ? `${origin}/api/auth/google/callback` : "/api/auth/google/callback";
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -111,6 +114,19 @@ export default async function SettingsPage() {
           updatedAt={resendSetting?.updatedAt ?? null}
         />
       </section>
+
+      {user.isAdmin && (
+        <section className="mt-10">
+          <h2 className="mb-1 text-lg font-bold text-sonate-green">Connexion Google</h2>
+          <p className="mb-4 text-sm text-sonate-muted">
+            Permet de se connecter avec un compte Google — uniquement pour les emails ayant déjà un compte ici
+            (créé directement ou via invitation), jamais une inscription automatique. Identifiants OAuth 2.0 à créer
+            dans <span className="font-semibold text-sonate-green">Google Cloud Console</span> (APIs &amp; Services →
+            Identifiants).
+          </p>
+          <GoogleOAuthSettingForm configured={googleSetting !== null} redirectUri={googleRedirectUri} />
+        </section>
+      )}
     </div>
   );
 }

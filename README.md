@@ -393,6 +393,29 @@ le cookie.
 **L'identifiant doit être une adresse email** (format vérifié côté client —
 `type="email"` — et côté serveur). La comparaison est insensible à la casse.
 
+### Connexion Google (OAuth 2.0)
+
+En plus de l'identifiant/mot de passe, un bouton "Se connecter avec Google"
+est disponible sur `/login`. Comme les invitations, **jamais de création de
+compte automatique** : ça ne fonctionne que si un compte existe déjà pour
+l'email Google utilisé (créé directement ou via invitation) — sinon message
+d'erreur explicite ("Aucun compte n'existe pour cet email Google").
+
+Implémenté en OAuth natif (`lib/google-auth.ts`, `app/api/auth/google/`),
+sans dépendance externe (pas de NextAuth) — cohérent avec le reste du
+système d'auth de cette app. Configuration (admin uniquement,
+`/settings` → section "Connexion Google") :
+
+1. Dans [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
+   créer des identifiants **OAuth 2.0 Client ID** (type "Application web").
+2. Ajouter l'URI de redirection affichée sur la page `/settings` (
+   `<origine>/api/auth/google/callback`) dans "URI de redirection autorisés".
+3. Coller le Client ID et le Client Secret dans `/settings`.
+
+Un state anti-CSRF (cookie `google_oauth_state`, 10 min) protège le flux
+d'autorisation ; l'email Google doit être vérifié (`email_verified`) pour
+être accepté.
+
 ## Développement local
 
 ```bash
