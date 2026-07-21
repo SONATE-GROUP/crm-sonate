@@ -32,6 +32,22 @@ body {
   font-family: var(--font-jakarta), Arial, Helvetica, sans-serif;
 }
 
+/*
+ * Les navigateurs repeignent les champs auto-remplis (mot de passe
+ * enregistré, autofill) avec leurs propres couleurs de fond/texte, en
+ * ignorant nos classes Tailwind — ce qui peut rendre le texte saisi
+ * quasi invisible. On force nos propres couleurs par-dessus.
+ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--color-sonate-green);
+  box-shadow: 0 0 0px 1000px white inset;
+  -webkit-box-shadow: 0 0 0px 1000px white inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 @keyframes drawer-in {
   from {
     transform: translateX(100%);
