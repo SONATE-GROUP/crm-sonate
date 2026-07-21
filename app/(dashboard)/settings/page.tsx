@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -5,11 +6,12 @@ import { ApiKeyManager } from "@/components/ApiKeyManager";
 import { IntegrationSettingForm } from "@/components/IntegrationSettingForm";
 import { PageHeader } from "@/components/PageHeader";
 import { getIntegrationSettingForOwner, listApiKeysForOwner } from "@/lib/queries";
-import { getCurrentUserEmail } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 
 export default async function SettingsPage() {
-  const email = await getCurrentUserEmail();
-  if (!email) redirect("/login");
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  const email = user.email;
 
   const [keys, derrickSetting, lgmSetting, anthropicSetting] = await Promise.all([
     listApiKeysForOwner(email),
@@ -80,6 +82,29 @@ export default async function SettingsPage() {
           {lgmWebhookUrl}?key=VOTRE_CLE_API
         </code>
       </section>
+
+      {user.isAdmin && (
+        <section className="mt-10">
+          <h2 className="mb-1 text-lg font-bold text-sonate-green">Administration</h2>
+          <p className="mb-4 text-sm text-sonate-muted">
+            Gestion des comptes et des espaces clients (visible uniquement par les admins).
+          </p>
+          <div className="flex gap-3">
+            <Link
+              href="/settings/users"
+              className="rounded-full border border-sonate-green/20 px-5 py-2 text-sm font-semibold text-sonate-green hover:bg-sonate-green/5"
+            >
+              Utilisateurs →
+            </Link>
+            <Link
+              href="/settings/workspaces"
+              className="rounded-full border border-sonate-green/20 px-5 py-2 text-sm font-semibold text-sonate-green hover:bg-sonate-green/5"
+            >
+              Espaces clients →
+            </Link>
+          </div>
+        </section>
+      )}
 
       <section className="mt-10">
         <h2 className="mb-1 text-lg font-bold text-sonate-green">Anthropic (Claude)</h2>

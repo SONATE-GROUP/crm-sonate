@@ -1,10 +1,13 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { createSessionCookieValue, getAccounts, isValidEmailFormat, SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/auth";
+import { db } from "@/db/client";
+import { users } from "@/db/schema";
+import { createSessionCookieValue, isValidEmailFormat, SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/auth";
 
 export type LoginState = { error?: string } | undefined;
 
@@ -18,13 +21,13 @@ export async function login(_prevState: LoginState, formData: FormData): Promise
     return { error: "L'identifiant doit être une adresse email." };
   }
 
-  const hash = getAccounts()[username];
-  if (!hash || !bcrypt.compareSync(password, hash)) {
+  const [user] = await db.select().from(users).where(eq(users.email, username)).limit(1);
+  if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
     return { error: "Identifiant ou mot de passe incorrect." };
   }
 
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, createSessionCookieValue(username), {
+  cookieStore.set(SESSION_COOKIE, await createSessionCookieValue(user.id), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

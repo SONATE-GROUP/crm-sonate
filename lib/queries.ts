@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import { and, asc, desc, eq, gte, like, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, like, lte, or, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import {
@@ -10,6 +10,9 @@ import {
   deals,
   integrationSettings,
   pendingLeads,
+  users,
+  workspaceMembers,
+  workspaces,
   type DealStatus,
   type B2bB2c,
   type IntegrationProvider,
@@ -17,6 +20,21 @@ import {
 } from "@/db/schema";
 
 export const PAGE_SIZE = 50;
+
+/**
+ * Périmètre d'accès de l'utilisateur courant (cf. lib/session.ts) : un admin
+ * voit tout, un utilisateur normal ne voit que les entreprises (et
+ * contacts/deals hérités) rattachées à un de ses espaces. Requis sur toutes
+ * les requêtes de liste/détail/stats pour ne jamais oublier le filtrage.
+ */
+export type Scope = { isAdmin: boolean; workspaceIds: number[] };
+
+/** Condition SQL à ajouter sur `companies.workspaceId` (ou une jointure vers companies) selon le périmètre. */
+function scopeCondition(scope: Scope) {
+  if (scope.isAdmin) return undefined;
+  if (scope.workspaceIds.length === 0) return sql`0 = 1`;
+  return inArray(companies.workspaceId, scope.workspaceIds);
+}
 
 // Les données changent maintenant aussi via l'ingestion live (lib/ingest.ts)
 // et les actions de fusion (lib/actions.ts), en plus du script d'import batch.
@@ -36,6 +54,7 @@ export type DealListFilters = {
   dateFrom?: string;
   dateTo?: string;
   page?: number;
+  scope: Scope;
 };
 
 export type DealKanbanFilters = Omit<DealListFilters, "status" | "page">;
@@ -72,6 +91,8 @@ function buildDealsWhere(filters: DealListFilters) {
   if (filters.scoreMin !== undefined) conditions.push(gte(deals.score, filters.scoreMin));
   if (filters.dateFrom) conditions.push(gte(deals.createdAt, new Date(`${filters.dateFrom}T00:00:00`)));
   if (filters.dateTo) conditions.push(lte(deals.createdAt, new Date(`${filters.dateTo}T23:59:59`)));
+  const scoped = scopeCondition(filters.scope);
+  if (scoped) conditions.push(scoped);
 
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
@@ -157,11 +178,14 @@ export const listDealsForKanban = unstable_cache(_listDealsForKanban, ["list-dea
 });
 export type KanbanDeal = Awaited<ReturnType<typeof _listDealsForKanban>>[number];
 
-async function _listOwners() {
+async function _listOwners(scope: Scope) {
+  const scoped = scopeCondition(scope);
+  const where = scoped ? and(sql`${deals.owner} is not null`, scoped) : sql`${deals.owner} is not null`;
   const rows = await db
     .select({ owner: deals.owner })
     .from(deals)
-    .where(sql`${deals.owner} is not null`)
+    .innerJoin(companies, eq(deals.companyId, companies.id))
+    .where(where)
     .groupBy(deals.owner)
     .orderBy(asc(deals.owner));
   return rows.map((r) => r.owner!).filter(Boolean);
@@ -173,6 +197,7 @@ export type CompanyListFilters = {
   b2bB2c?: B2bB2c;
   sourceSystem?: SourceSystem;
   page?: number;
+  scope: Scope;
 };
 
 function buildCompaniesWhere(filters: CompanyListFilters) {
@@ -189,6 +214,8 @@ function buildCompaniesWhere(filters: CompanyListFilters) {
   }
   if (filters.b2bB2c) conditions.push(eq(companies.b2bB2c, filters.b2bB2c));
   if (filters.sourceSystem) conditions.push(eq(companies.sourceSystem, filters.sourceSystem));
+  const scoped = scopeCondition(filters.scope);
+  if (scoped) conditions.push(scoped);
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
@@ -249,9 +276,14 @@ export type PendingLead = {
   payload: import("@/lib/ingest").LeadPayload;
 };
 
-async function _getCompanyDetail(id: number) {
+function canAccessWorkspace(scope: Scope, workspaceId: number | null): boolean {
+  if (scope.isAdmin) return true;
+  return workspaceId !== null && scope.workspaceIds.includes(workspaceId);
+}
+
+async function _getCompanyDetail(id: number, scope: Scope) {
   const [company] = await db.select().from(companies).where(eq(companies.id, id)).limit(1);
-  if (!company) return null;
+  if (!company || !canAccessWorkspace(scope, company.workspaceId)) return null;
 
   const [companyContacts, companyDeals, pending] = await Promise.all([
     db.select().from(contacts).where(eq(contacts.companyId, id)).orderBy(asc(contacts.id)),
@@ -280,6 +312,7 @@ export const getCompanyDetail = unstable_cache(_getCompanyDetail, ["get-company-
 export type ContactListFilters = {
   q?: string;
   page?: number;
+  scope: Scope;
 };
 
 function buildContactsWhere(filters: ContactListFilters) {
@@ -295,6 +328,8 @@ function buildContactsWhere(filters: ContactListFilters) {
       )
     );
   }
+  const scoped = scopeCondition(filters.scope);
+  if (scoped) conditions.push(scoped);
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
@@ -344,7 +379,7 @@ async function _listContacts(filters: ContactListFilters) {
 export const listContacts = unstable_cache(_listContacts, ["list-contacts"], { revalidate: REVALIDATE_SECONDS, tags: CACHE_TAGS });
 export type ContactRow = Awaited<ReturnType<typeof _listContacts>>["rows"][number];
 
-async function _getContactDetail(id: number) {
+async function _getContactDetail(id: number, scope: Scope) {
   const [contact] = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
   if (!contact) return null;
 
@@ -352,6 +387,7 @@ async function _getContactDetail(id: number) {
     db.select().from(companies).where(eq(companies.id, contact.companyId)).limit(1).then((r) => r[0]),
     db.select().from(deals).where(eq(deals.companyId, contact.companyId)).orderBy(desc(deals.createdAt)),
   ]);
+  if (!canAccessWorkspace(scope, company?.workspaceId ?? null)) return null;
 
   return { contact, company, deals: companyDeals };
 }
@@ -373,7 +409,7 @@ export const getConversationsForContact = unstable_cache(_getConversationsForCon
 });
 export type ConversationMessage = Awaited<ReturnType<typeof _getConversationsForContact>>[number];
 
-async function _getDealDetail(id: number) {
+async function _getDealDetail(id: number, scope: Scope) {
   const [deal] = await db.select().from(deals).where(eq(deals.id, id)).limit(1);
   if (!deal) return null;
 
@@ -382,6 +418,7 @@ async function _getDealDetail(id: number) {
     db.select().from(deals).where(eq(deals.companyId, deal.companyId)).orderBy(desc(deals.createdAt)),
     db.select().from(contacts).where(eq(contacts.companyId, deal.companyId)).orderBy(asc(contacts.id)),
   ]);
+  if (!canAccessWorkspace(scope, company?.workspaceId ?? null)) return null;
 
   return { deal, company, contacts: companyContacts, otherDeals: companyDeals.filter((d) => d.id !== id) };
 }
@@ -393,8 +430,9 @@ function toDate(epochSeconds: number | null): Date | null {
 
 export type DealStats = { total: number; gagne: number; perdu: number; avgScore: number | null; lastImport: Date | null };
 
-async function _getDealStats(): Promise<DealStats> {
-  const [row] = await db
+async function _getDealStats(scope: Scope): Promise<DealStats> {
+  const scoped = scopeCondition(scope);
+  const query = db
     .select({
       total: sql<number>`count(*)`,
       gagne: sql<number>`sum(case when ${deals.status} = 'gagne' then 1 else 0 end)`,
@@ -402,7 +440,9 @@ async function _getDealStats(): Promise<DealStats> {
       avgScore: sql<number | null>`avg(${deals.score})`,
       lastImport: sql<number | null>`max(${deals.createdAt})`,
     })
-    .from(deals);
+    .from(deals)
+    .innerJoin(companies, eq(deals.companyId, companies.id));
+  const [row] = scoped ? await query.where(scoped) : await query;
   return {
     total: row.total,
     gagne: row.gagne,
@@ -422,18 +462,24 @@ export type CompanyStats = {
   lastImport: Date | null;
 };
 
-async function _getCompanyStats(): Promise<CompanyStats> {
+async function _getCompanyStats(scope: Scope): Promise<CompanyStats> {
+  const scoped = scopeCondition(scope);
+  const companyQuery = db
+    .select({
+      total: sql<number>`count(*)`,
+      b2b: sql<number>`sum(case when ${companies.b2bB2c} = 'b2b' then 1 else 0 end)`,
+      b2c: sql<number>`sum(case when ${companies.b2bB2c} = 'b2c' then 1 else 0 end)`,
+      mixte: sql<number>`sum(case when ${companies.b2bB2c} = 'mixte' then 1 else 0 end)`,
+      lastImport: sql<number | null>`max(${companies.createdAt})`,
+    })
+    .from(companies);
+  const contactQuery = db
+    .select({ totalContacts: sql<number>`count(*)` })
+    .from(contacts)
+    .innerJoin(companies, eq(contacts.companyId, companies.id));
   const [[row], [{ totalContacts }]] = await Promise.all([
-    db
-      .select({
-        total: sql<number>`count(*)`,
-        b2b: sql<number>`sum(case when ${companies.b2bB2c} = 'b2b' then 1 else 0 end)`,
-        b2c: sql<number>`sum(case when ${companies.b2bB2c} = 'b2c' then 1 else 0 end)`,
-        mixte: sql<number>`sum(case when ${companies.b2bB2c} = 'mixte' then 1 else 0 end)`,
-        lastImport: sql<number | null>`max(${companies.createdAt})`,
-      })
-      .from(companies),
-    db.select({ totalContacts: sql<number>`count(*)` }).from(contacts),
+    scoped ? companyQuery.where(scoped) : companyQuery,
+    scoped ? contactQuery.where(scoped) : contactQuery,
   ]);
   return {
     total: row.total,
@@ -448,15 +494,18 @@ export const getCompanyStats = unstable_cache(_getCompanyStats, ["company-stats"
 
 export type ContactStats = { total: number; withEmail: number; withPhone: number; lastImport: Date | null };
 
-async function _getContactStats(): Promise<ContactStats> {
-  const [row] = await db
+async function _getContactStats(scope: Scope): Promise<ContactStats> {
+  const scoped = scopeCondition(scope);
+  const query = db
     .select({
       total: sql<number>`count(*)`,
       withEmail: sql<number>`sum(case when ${contacts.email} is not null then 1 else 0 end)`,
       withPhone: sql<number>`sum(case when ${contacts.phone} is not null then 1 else 0 end)`,
       lastImport: sql<number | null>`max(${contacts.createdAt})`,
     })
-    .from(contacts);
+    .from(contacts)
+    .innerJoin(companies, eq(contacts.companyId, companies.id));
+  const [row] = scoped ? await query.where(scoped) : await query;
   return {
     total: row.total,
     withEmail: row.withEmail,
@@ -490,6 +539,81 @@ export async function getIntegrationSettingForOwner(ownerEmail: string, provider
     .from(integrationSettings)
     .where(and(eq(integrationSettings.ownerEmail, ownerEmail), eq(integrationSettings.provider, provider)));
   return row ?? null;
+}
+
+// Pas de unstable_cache sur les requêtes utilisateurs/espaces : pages admin à
+// faible trafic, la fraîcheur immédiate après création/modification prime.
+
+export async function listUsers() {
+  return db
+    .select({ id: users.id, email: users.email, fullName: users.fullName, role: users.role, createdAt: users.createdAt })
+    .from(users)
+    .orderBy(asc(users.email));
+}
+
+export async function getUserByEmail(email: string) {
+  const [row] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return row ?? null;
+}
+
+export async function listWorkspaces() {
+  const memberCount = db.$with("member_count").as(
+    db
+      .select({ workspaceId: workspaceMembers.workspaceId, memberN: sql<number>`count(*)`.as("member_n") })
+      .from(workspaceMembers)
+      .groupBy(workspaceMembers.workspaceId)
+  );
+  const companyCount = db.$with("company_count").as(
+    db
+      .select({ workspaceId: companies.workspaceId, companyN: sql<number>`count(*)`.as("company_n") })
+      .from(companies)
+      .where(sql`${companies.workspaceId} is not null`)
+      .groupBy(companies.workspaceId)
+  );
+  return db
+    .with(memberCount, companyCount)
+    .select({
+      id: workspaces.id,
+      name: workspaces.name,
+      createdAt: workspaces.createdAt,
+      membersCount: sql<number>`coalesce(${memberCount.memberN}, 0)`,
+      companiesCount: sql<number>`coalesce(${companyCount.companyN}, 0)`,
+    })
+    .from(workspaces)
+    .leftJoin(memberCount, eq(memberCount.workspaceId, workspaces.id))
+    .leftJoin(companyCount, eq(companyCount.workspaceId, workspaces.id))
+    .orderBy(asc(workspaces.name));
+}
+
+export async function getWorkspaceDetail(id: number) {
+  const [workspace] = await db.select().from(workspaces).where(eq(workspaces.id, id)).limit(1);
+  if (!workspace) return null;
+
+  const [members, workspaceCompanies] = await Promise.all([
+    db
+      .select({
+        membershipId: workspaceMembers.id,
+        role: workspaceMembers.role,
+        userId: users.id,
+        email: users.email,
+        fullName: users.fullName,
+      })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(workspaceMembers.userId, users.id))
+      .where(eq(workspaceMembers.workspaceId, id))
+      .orderBy(asc(users.email)),
+    db.select({ id: companies.id, name: companies.name }).from(companies).where(eq(companies.workspaceId, id)).orderBy(asc(companies.name)),
+  ]);
+
+  return { workspace, members, companies: workspaceCompanies };
+}
+
+/** Toutes les entreprises avec leur espace actuel (ou aucun) — pour l'écran d'assignation. */
+export async function listCompaniesForWorkspaceAssignment() {
+  return db
+    .select({ id: companies.id, name: companies.name, workspaceId: companies.workspaceId })
+    .from(companies)
+    .orderBy(asc(companies.name));
 }
 
 /**

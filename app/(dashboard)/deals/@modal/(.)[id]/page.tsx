@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { getDealDetail } from "@/lib/queries";
+import { getCurrentUser } from "@/lib/session";
 import { Drawer } from "@/components/Drawer";
 import { DrawerSection, DrawerRow } from "@/components/DrawerSection";
 import { DealStatusSelect } from "@/components/DealStatusSelect";
@@ -20,11 +21,14 @@ export default async function DealModal({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
   const { id } = await params;
   const dealId = Number(id);
   if (!Number.isInteger(dealId)) notFound();
 
-  const detail = await getDealDetail(dealId);
+  const detail = await getDealDetail(dealId, { isAdmin: user.isAdmin, workspaceIds: user.workspaceIds });
   if (!detail) notFound();
 
   const { deal, company, contacts, otherDeals } = detail;

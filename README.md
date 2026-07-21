@@ -301,10 +301,18 @@ Page accessible depuis la sidebar, propre à chaque compte connecté
 - **Intégrations** : clé API Derrick App par utilisateur
   (`components/IntegrationSettingForm.tsx`).
 
-Aucune variable d'environnement Netlify n'est nécessaire pour ces deux
-usages — c'est tout l'intérêt de cette page. (`TURSO_DATABASE_URL` /
-`TURSO_AUTH_TOKEN` / `AUTH_USERS` restent des variables d'environnement,
-elles, car nécessaires avant même qu'un compte existe pour se connecter.)
+Aucune variable d'environnement n'est nécessaire pour ces deux usages —
+c'est tout l'intérêt de cette page. Seules `TURSO_DATABASE_URL` /
+`TURSO_AUTH_TOKEN` restent des variables d'environnement, elles, car
+nécessaires avant même qu'une connexion à la base soit possible.
+
+- **Utilisateurs** (`/settings/users`, admin uniquement) : créer des comptes
+  (email, mot de passe, rôle admin/utilisateur) directement en base.
+- **Espaces clients** (`/settings/workspaces`, admin uniquement) : créer un
+  espace, y ajouter des membres et des entreprises. Un admin voit toutes les
+  entreprises ; un utilisateur normal ne voit que celles rattachées à un
+  espace dont il est membre (contacts/deals héritent de la portée via
+  l'entreprise).
 
 ### Migrations de schéma
 
@@ -327,43 +335,31 @@ un aller-retour transatlantique par requête est le suspect n°1.
 
 ## Auth — page de connexion
 
-Quelques comptes définis via la variable d'environnement `AUTH_USERS` :
-
-```
-AUTH_USERS=alice@sonate.group:$2b$10$hash...,bob@sonate.group:$2b$10$hash...
-```
-
-Générer un hash :
+Les comptes vivent dans la table `users` (email, hash bcrypt, nom complet,
+rôle `admin`/`user`) — plus de variable d'environnement `AUTH_USERS`. Un
+premier compte admin s'amorce en base directement (avant qu'aucun admin
+n'existe pour passer par l'UI) :
 
 ```bash
-npx tsx scripts/hash-password.ts "mot-de-passe"
+npx tsx scripts/create-admin.ts alice@sonate.group "mot-de-passe" "Alice Dupont"
 ```
+
+Une fois ce premier admin créé, tous les comptes suivants se créent depuis
+`/settings/users` (voir ci-dessus).
 
 La connexion se fait via une vraie page (`/login`, formulaire identifiant +
 mot de passe) plutôt qu'une popup HTTP Basic Auth du navigateur. `proxy.ts`
 redirige vers `/login?next=<page demandée>` toute requête sans cookie de
 session valide ; le Server Action `login` (`lib/auth-actions.ts`) vérifie le
-mot de passe contre `AUTH_USERS` puis pose un cookie de session signé (HMAC,
-30 jours, `httpOnly`) — signé avec `AUTH_USERS` lui-même comme clé, donc pas
-de variable d'environnement supplémentaire à gérer, et changer `AUTH_USERS`
-invalide au passage toutes les sessions en cours. Un bouton "Déconnexion" en
-bas de la sidebar (`lib/auth-actions.ts:logout`) supprime le cookie.
+mot de passe contre la table `users` puis pose un cookie de session signé
+(HMAC, 30 jours, `httpOnly`) — la clé de signature est un secret généré
+automatiquement au premier démarrage et stocké dans la table `app_secrets`
+(pas de variable d'environnement supplémentaire à gérer). Un bouton
+"Déconnexion" en bas de la sidebar (`lib/auth-actions.ts:logout`) supprime
+le cookie.
 
 **L'identifiant doit être une adresse email** (format vérifié côté client —
-`type="email"` — et côté serveur ; toute entrée `AUTH_USERS` dont la partie
-avant `:` n'a pas la forme d'un email est ignorée). La comparaison est
-insensible à la casse.
-
-⚠️ **Dans un fichier `.env*` local**, Next.js interprète `$xxx` comme une
-interpolation de variable et casse les hash bcrypt. Échapper chaque `$` en
-`\$` dans `.env.local` :
-
-```
-AUTH_USERS=alice:\$2b\$10\$hash...
-```
-
-Sur Netlify, les variables d'environnement sont injectées directement (pas de
-parsing `.env`) : coller le hash **sans** échappement dans le dashboard.
+`type="email"` — et côté serveur). La comparaison est insensible à la casse.
 
 ## Développement local
 
@@ -378,9 +374,11 @@ npm run dev
 
 1. Importer le repo sur Vercel.
 2. Variables d'environnement à définir : `TURSO_DATABASE_URL`,
-   `TURSO_AUTH_TOKEN`, `AUTH_USERS` (voir ci-dessus, pas d'échappement `$`
-   nécessaire dans le dashboard Vercel).
+   `TURSO_AUTH_TOKEN` (les seules encore nécessaires — tout le reste, y
+   compris les comptes utilisateurs, vit en base).
 3. Build command par défaut (`next build`) — aucune config supplémentaire.
 4. Lancer l'import (`npx tsx scripts/import.ts ...`) une fois en local avec
    `TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN` de prod pointés vers la base Turso
    distante, avant ou après le premier déploiement.
+5. Amorcer le premier compte admin (`npx tsx scripts/create-admin.ts ...`,
+   voir section Auth) avec les mêmes variables pointées vers la prod.

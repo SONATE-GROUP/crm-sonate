@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { B2B_B2C_VALUES, DEAL_STATUS_LABELS, DEAL_STATUS_VALUES, type B2bB2c, type DealStatus } from "@/db/schema";
 import { listDeals, listOwners, getDealStats, PAGE_SIZE } from "@/lib/queries";
+import { getCurrentUser } from "@/lib/session";
 import { fieldClass, labelClass } from "@/lib/ui";
 import { Pagination } from "@/components/Pagination";
 import { PageHeader } from "@/components/PageHeader";
@@ -22,6 +24,10 @@ export default async function DealsPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  const scope = { isAdmin: user.isAdmin, workspaceIds: user.workspaceIds };
+
   const sp = await searchParams;
   const get = (key: string) => {
     const v = sp[key];
@@ -42,9 +48,9 @@ export default async function DealsPage({
   const scoreMin = scoreMinParam && !Number.isNaN(Number(scoreMinParam)) ? Number(scoreMinParam) : undefined;
 
   const [{ rows, total, pageCount }, owners, stats] = await Promise.all([
-    listDeals({ q, status, b2bB2c, owner, scoreMin, dateFrom, dateTo, page }),
-    listOwners(),
-    getDealStats(),
+    listDeals({ q, status, b2bB2c, owner, scoreMin, dateFrom, dateTo, page, scope }),
+    listOwners(scope),
+    getDealStats(scope),
   ]);
 
   const currentParams = {

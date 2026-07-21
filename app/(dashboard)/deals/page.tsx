@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { B2B_B2C_VALUES, DEAL_STATUS_VALUES, type B2bB2c } from "@/db/schema";
 import { listDealsForKanban, listOwners, getDealStats } from "@/lib/queries";
+import { getCurrentUser } from "@/lib/session";
 import { fieldClass, labelClass } from "@/lib/ui";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
@@ -17,6 +19,10 @@ export default async function DealsKanbanPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  const scope = { isAdmin: user.isAdmin, workspaceIds: user.workspaceIds };
+
   const sp = await searchParams;
   const get = (key: string) => {
     const v = sp[key];
@@ -34,9 +40,9 @@ export default async function DealsKanbanPage({
   const scoreMin = scoreMinParam && !Number.isNaN(Number(scoreMinParam)) ? Number(scoreMinParam) : undefined;
 
   const [deals, owners, stats] = await Promise.all([
-    listDealsForKanban({ q, b2bB2c, owner, scoreMin, dateFrom, dateTo }),
-    listOwners(),
-    getDealStats(),
+    listDealsForKanban({ q, b2bB2c, owner, scoreMin, dateFrom, dateTo, scope }),
+    listOwners(scope),
+    getDealStats(scope),
   ]);
 
   const withoutColumn = deals.filter(

@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { B2B_B2C_VALUES, SOURCE_SYSTEM_VALUES, type B2bB2c, type SourceSystem } from "@/db/schema";
 import { listCompanies, getCompanyStats, PAGE_SIZE } from "@/lib/queries";
+import { getCurrentUser } from "@/lib/session";
 import { fieldClass, labelClass } from "@/lib/ui";
 import { Pagination } from "@/components/Pagination";
 import { PageHeader } from "@/components/PageHeader";
@@ -21,6 +23,10 @@ export default async function CompaniesPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  const scope = { isAdmin: user.isAdmin, workspaceIds: user.workspaceIds };
+
   const sp = await searchParams;
   const get = (key: string) => {
     const v = sp[key];
@@ -36,8 +42,8 @@ export default async function CompaniesPage({
   const sourceSystem = sourceSystemParam && isSourceSystem(sourceSystemParam) ? sourceSystemParam : undefined;
 
   const [{ rows, total, pageCount }, stats] = await Promise.all([
-    listCompanies({ q, b2bB2c, sourceSystem, page }),
-    getCompanyStats(),
+    listCompanies({ q, b2bB2c, sourceSystem, page, scope }),
+    getCompanyStats(scope),
   ]);
 
   const currentParams = { q, b2bB2c: b2bB2cParam, sourceSystem: sourceSystemParam };
